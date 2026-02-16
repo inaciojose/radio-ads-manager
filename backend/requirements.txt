@@ -1,0 +1,32 @@
+# ============================================
+# DEPENDÊNCIAS DO PROJETO - RADIO ADS MANAGER
+# ============================================
+
+# Framework Web - FastAPI é rápido e moderno
+fastapi==0.109.0
+uvicorn[standard]==0.27.0  # Servidor para rodar a API
+
+# Banco de Dados
+sqlalchemy==2.0.25         # ORM - facilita trabalhar com banco de dados
+alembic==1.13.1            # Migrações de banco (controle de versão do schema)
+
+# Validação de Dados
+pydantic==2.5.3            # Validação automática de dados
+pydantic-settings==2.1.0   # Para configurações da aplicação
+
+# Utilitários
+python-dotenv==1.0.0       # Carregar variáveis de ambiente (.env)
+python-multipart==0.0.6    # Para upload de arquivos
+python-dateutil==2.8.2     # Manipulação de datas
+
+# Monitoramento de Arquivos (para ler logs do Zara)
+watchdog==3.0.0            # Detecta mudanças em arquivos/pastas
+
+# Opcional - para relatórios em Excel/PDF
+openpyxl==3.1.2            # Gerar arquivos Excel
+reportlab==4.0.9           # Gerar PDFs
+
+# Desenvolvimento
+pytest==7.4.4              # Testes automatizados
+httpx==0.26.0              # Cliente HTTP para testes
+requests==2.31.0           # Dependência usada nos testes atuais

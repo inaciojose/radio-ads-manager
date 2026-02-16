@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Radio Ads Manager</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="logo">
+        <i class="fas fa-radio"></i>
+        <h2>Radio Ads</h2>
+      </div>
+
+      <nav class="nav-menu">
+        <a
+          href="#dashboard"
+          class="nav-item active"
+          onclick="showPage('dashboard', event)"
+        >
+          <i class="fas fa-chart-line"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#clientes" class="nav-item" onclick="showPage('clientes', event)">
+          <i class="fas fa-users"></i>
+          <span>Clientes</span>
+        </a>
+        <a href="#contratos" class="nav-item" onclick="showPage('contratos', event)">
+          <i class="fas fa-file-contract"></i>
+          <span>Contratos</span>
+        </a>
+        <a
+          href="#veiculacoes"
+          class="nav-item"
+          onclick="showPage('veiculacoes', event)"
+        >
+          <i class="fas fa-broadcast-tower"></i>
+          <span>Veiculações</span>
+        </a>
+        <a href="#arquivos" class="nav-item" onclick="showPage('arquivos', event)">
+          <i class="fas fa-folder-open"></i>
+          <span>Arquivos</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="api-status">
+          <span class="status-indicator" id="api-status"></span>
+          <span id="api-status-text">Verificando API...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <div class="header-right">
+          <div class="date-time">
+            <i class="fas fa-calendar"></i>
+            <span id="current-date"></span>
+          </div>
+          <button
+            class="btn-refresh"
+            onclick="refreshCurrentPage(event)"
+            title="Atualizar"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Pages Container -->
+      <div class="content">
+        <!-- Dashboard Page -->
+        <div id="page-dashboard" class="page active">
+          <!-- Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon blue">
+                <i class="fas fa-users"></i>
+              </div>
+              <div class="stat-content">
+                <h3 id="stat-clientes">-</h3>
+                <p>Clientes Ativos</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon green">
+                <i class="fas fa-file-contract"></i>
+              </div>
+              <div class="stat-content">
+                <h3 id="stat-contratos">-</h3>
+                <p>Contratos Ativos</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon orange">
+                <i class="fas fa-broadcast-tower"></i>
+              </div>
+              <div class="stat-content">
+                <h3 id="stat-veiculacoes">-</h3>
+                <p>Veiculações Hoje</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon red">
+                <i class="fas fa-file-invoice"></i>
+              </div>
+              <div class="stat-content">
+                <h3 id="stat-nf-pendentes">-</h3>
+                <p>NFs Pendentes</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="charts-grid">
+            <div class="chart-card">
+              <h3>Veiculações por Tipo de Programa</h3>
+              <canvas id="chart-tipo-programa"></canvas>
+            </div>
+
+            <div class="chart-card">
+              <h3>Top 5 Clientes (Hoje)</h3>
+              <canvas id="chart-top-clientes"></canvas>
+            </div>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="card">
+            <h3>Últimas Veiculações</h3>
+            <div class="table-responsive">
+              <table class="table" id="table-recent-veiculacoes">
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Cliente</th>
+                    <th>Arquivo</th>
+                    <th>Programa</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="5" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clientes Page -->
+        <div id="page-clientes" class="page">
+          <div class="page-header">
+            <button class="btn btn-primary" onclick="showClienteModal()">
+              <i class="fas fa-plus"></i> Novo Cliente
+            </button>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-clientes"
+                placeholder="Buscar clientes..."
+                onkeyup="searchClientes()"
+              />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-clientes">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>CNPJ/CPF</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contratos Page -->
+        <div id="page-contratos" class="page">
+          <div class="page-header">
+            <button class="btn btn-primary" onclick="showContratoModal()">
+              <i class="fas fa-plus"></i> Novo Contrato
+            </button>
+            <div class="filters">
+              <select id="filter-contrato-status" onchange="loadContratos()">
+                <option value="">Todos os Status</option>
+                <option value="ativo">Ativos</option>
+                <option value="concluído">Concluídos</option>
+                <option value="cancelado">Cancelados</option>
+              </select>
+              <select id="filter-contrato-nf" onchange="loadContratos()">
+                <option value="">Todas as NFs</option>
+                <option value="pendente">NF Pendente</option>
+                <option value="emitida">NF Emitida</option>
+                <option value="paga">NF Paga</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-contratos">
+                <thead>
+                  <tr>
+                    <th>Número</th>
+                    <th>Cliente</th>
+                    <th>Período</th>
+                    <th>Progresso</th>
+                    <th>Valor</th>
+                    <th>NF</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="7" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Veiculações Page -->
+        <div id="page-veiculacoes" class="page">
+          <div class="page-header">
+            <div class="date-filter">
+              <input
+                type="date"
+                id="filter-veiculacao-data"
+                onchange="loadVeiculacoes()"
+              />
+            </div>
+            <button class="btn btn-success" onclick="processarVeiculacoes()">
+              <i class="fas fa-cogs"></i> Processar Veiculações
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-veiculacoes">
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Cliente</th>
+                    <th>Arquivo</th>
+                    <th>Programa</th>
+                    <th>Contrato</th>
+                    <th>Processado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arquivos Page -->
+        <div id="page-arquivos" class="page">
+          <div class="page-header">
+            <button class="btn btn-primary" onclick="showArquivoModal()">
+              <i class="fas fa-plus"></i> Novo Arquivo
+            </button>
+            <div class="filters">
+              <select id="filter-arquivo-status" onchange="loadArquivos()">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-arquivos">
+                <thead>
+                  <tr>
+                    <th>Nome do Arquivo</th>
+                    <th>Título</th>
+                    <th>Cliente</th>
+                    <th>Duração</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div
+      id="modal-backdrop"
+      class="modal-backdrop"
+      onclick="closeModal()"
+    ></div>
+
+    <!-- Cliente Modal -->
+    <div id="modal-cliente" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="cliente-modal-title">Novo Cliente</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-cliente">
+            <input type="hidden" id="cliente-id" />
+
+            <div class="form-group">
+              <label>Nome *</label>
+              <input type="text" id="cliente-nome" required />
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>CNPJ/CPF</label>
+                <input type="text" id="cliente-cnpj" />
+              </div>
+              <div class="form-group">
+                <label>Telefone</label>
+                <input type="text" id="cliente-telefone" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="cliente-email" />
+            </div>
+
+            <div class="form-group">
+              <label>Endereço</label>
+              <textarea id="cliente-endereco" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Status</label>
+              <select id="cliente-status">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Observações</label>
+              <textarea id="cliente-observacoes" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">
+            Cancelar
+          </button>
+          <button class="btn btn-primary" onclick="saveCliente()">
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Carregando...</p>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/clientes.js"></script>
+    <script src="js/contratos.js"></script>
+    <script src="js/veiculacoes.js"></script>
+    <script src="js/arquivos.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
