@@ -5,6 +5,7 @@ Suporta PostgreSQL via DATABASE_URL e mantém fallback para SQLite local.
 """
 
 import os
+from typing import Any
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -22,7 +23,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 
-engine_kwargs = {"echo": False}
+engine_kwargs: dict[str, Any] = {"echo": False}
 if IS_SQLITE:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
