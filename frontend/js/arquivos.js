@@ -60,9 +60,13 @@ function renderArquivos(items, clientesPorId) {
         <td>${a.duracao_segundos ? `${a.duracao_segundos}s` : "-"}</td>
         <td>${getStatusBadge(String(a.ativo), "arquivo")}</td>
         <td>
-          <button class="btn btn-sm btn-secondary" onclick="showArquivoModal(${a.id})">Editar</button>
-          <button class="btn btn-sm btn-primary" onclick="toggleArquivo(${a.id})">Ativar/Inativar</button>
-          <button class="btn btn-sm btn-danger" onclick="removerArquivo(${a.id})">Excluir</button>
+          ${
+            canWrite()
+              ? `<button class="btn btn-sm btn-secondary" onclick="showArquivoModal(${a.id})">Editar</button>
+                 <button class="btn btn-sm btn-primary" onclick="toggleArquivo(${a.id})">Ativar/Inativar</button>
+                 <button class="btn btn-sm btn-danger" onclick="removerArquivo(${a.id})">Excluir</button>`
+              : '<span class="badge badge-secondary">Somente leitura</span>'
+          }
         </td>
       </tr>
     `,
@@ -71,6 +75,7 @@ function renderArquivos(items, clientesPorId) {
 }
 
 async function showArquivoModal(arquivoId = null) {
+  if (!requireWriteAccess()) return
   await ensureClientesArquivoCache()
 
   const arquivo = arquivoId
@@ -101,6 +106,7 @@ async function showArquivoModal(arquivoId = null) {
 }
 
 async function saveArquivo() {
+  if (!requireWriteAccess()) return
   const id = document.getElementById("arquivo-id").value
   const isEdit = Boolean(id)
 
@@ -151,6 +157,7 @@ async function saveArquivo() {
 }
 
 async function toggleArquivo(id) {
+  if (!requireWriteAccess()) return
   try {
     showLoading()
     await api.toggleArquivoAtivo(id)
@@ -164,6 +171,7 @@ async function toggleArquivo(id) {
 }
 
 async function removerArquivo(id) {
+  if (!requireWriteAccess()) return
   if (!confirmAction("Deseja excluir este arquivo?")) return
 
   try {

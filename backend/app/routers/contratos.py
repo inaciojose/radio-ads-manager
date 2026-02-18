@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app import models, schemas
 from app.database import get_db
 from app.services.contratos_service import criar_contrato_com_itens
@@ -166,6 +167,7 @@ def buscar_contrato(
 def criar_contrato(
     contrato: schemas.ContratoCreate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     cliente = db.query(models.Cliente).filter(models.Cliente.id == contrato.cliente_id).first()
     if not cliente:
@@ -182,6 +184,7 @@ def adicionar_item_contrato(
     contrato_id: int,
     item: schemas.ContratoItemCreate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not contrato:
@@ -211,6 +214,7 @@ def atualizar_item_contrato(
     item_id: int,
     item_update: schemas.ContratoItemUpdate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_item = db.query(models.ContratoItem).filter(
         models.ContratoItem.id == item_id,
@@ -236,6 +240,7 @@ def atualizar_contrato(
     contrato_id: int,
     contrato_update: schemas.ContratoUpdate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not db_contrato:
@@ -260,6 +265,7 @@ def atualizar_nota_fiscal(
     numero_nf: Optional[str] = Query(None),
     data_emissao: Optional[date] = Query(None),
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not db_contrato:
@@ -292,6 +298,7 @@ def atualizar_nota_fiscal(
 def deletar_contrato(
     contrato_id: int,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not db_contrato:

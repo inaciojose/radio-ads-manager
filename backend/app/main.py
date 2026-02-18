@@ -12,7 +12,8 @@ from contextlib import asynccontextmanager
 import os
 
 from app.database import init_db, get_database_info
-from app.routers import clientes, contratos, veiculacoes, arquivos
+from app.auth import ensure_initial_admin
+from app.routers import arquivos, auth, clientes, contratos, usuarios, veiculacoes
 
 
 # ============================================
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     
     # Inicializar banco de dados
     init_db()
+    ensure_initial_admin()
     
     # Mostrar informações do banco
     db_info = get_database_info()
@@ -126,7 +128,9 @@ def root():
             "clientes": "/clientes",
             "contratos": "/contratos",
             "veiculacoes": "/veiculacoes",
-            "arquivos": "/arquivos"
+            "arquivos": "/arquivos",
+            "auth": "/auth",
+            "usuarios": "/usuarios",
         }
     }
 
@@ -162,6 +166,12 @@ app.include_router(veiculacoes.router)
 
 # Registrar router de arquivos
 app.include_router(arquivos.router)
+
+# Registrar auth
+app.include_router(auth.router)
+
+# Registrar usuários
+app.include_router(usuarios.router)
 
 
 # ============================================

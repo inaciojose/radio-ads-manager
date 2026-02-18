@@ -93,9 +93,13 @@ function renderContratos(items, clientesPorId) {
         <td>${getStatusBadge(c.status_nf, "nf")}</td>
         <td>${getStatusBadge(c.status_contrato, "contrato")}</td>
         <td>
-          <button class="btn btn-sm btn-secondary" onclick="showContratoModal(${c.id})">Editar</button>
-          <button class="btn btn-sm btn-primary" onclick="showNotaFiscalModal(${c.id})">NF</button>
-          <button class="btn btn-sm btn-danger" onclick="removerContrato(${c.id})">Excluir</button>
+          ${
+            canWrite()
+              ? `<button class="btn btn-sm btn-secondary" onclick="showContratoModal(${c.id})">Editar</button>
+                 <button class="btn btn-sm btn-primary" onclick="showNotaFiscalModal(${c.id})">NF</button>
+                 <button class="btn btn-sm btn-danger" onclick="removerContrato(${c.id})">Excluir</button>`
+              : '<span class="badge badge-secondary">Somente leitura</span>'
+          }
         </td>
       </tr>
       `
@@ -167,6 +171,7 @@ function renderContratoItensEdit(itens) {
 }
 
 async function showContratoModal(contratoId = null) {
+  if (!requireWriteAccess()) return
   const modalTitle = document.getElementById("contrato-modal-title")
   const createItemSection = document.getElementById("contrato-item-create-section")
   const editItemSection = document.getElementById("contrato-item-edit-section")
@@ -228,6 +233,7 @@ async function showContratoModal(contratoId = null) {
 }
 
 async function saveContrato() {
+  if (!requireWriteAccess()) return
   const id = document.getElementById("contrato-id").value
   const isEdit = Boolean(id)
 
@@ -321,6 +327,7 @@ async function saveContrato() {
 }
 
 function showNotaFiscalModal(id) {
+  if (!requireWriteAccess()) return
   const contrato = contratosCache.find((c) => c.id === Number(id))
   if (!contrato) return
 
@@ -333,6 +340,7 @@ function showNotaFiscalModal(id) {
 }
 
 async function saveNotaFiscal() {
+  if (!requireWriteAccess()) return
   const id = document.getElementById("nf-contrato-id").value
   const status = document.getElementById("nf-status").value
   const numero = document.getElementById("nf-numero").value.trim()
@@ -356,6 +364,7 @@ async function saveNotaFiscal() {
 }
 
 async function removerContrato(id) {
+  if (!requireWriteAccess()) return
   if (!confirmAction("Deseja excluir este contrato?")) return
 
   try {

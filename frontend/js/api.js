@@ -6,6 +6,7 @@
 class API {
   constructor(baseURL) {
     this.baseURL = baseURL
+    this.token = window.localStorage.getItem("RADIO_ADS_ACCESS_TOKEN") || null
   }
 
   /**
@@ -26,6 +27,9 @@ class API {
     }
     if (options.body && !config.headers["Content-Type"]) {
       config.headers["Content-Type"] = "application/json"
+    }
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`
     }
 
     try {
@@ -79,6 +83,15 @@ class API {
     return this.request("/health")
   }
 
+  setAuthToken(token) {
+    this.token = token
+    if (token) {
+      window.localStorage.setItem("RADIO_ADS_ACCESS_TOKEN", token)
+    } else {
+      window.localStorage.removeItem("RADIO_ADS_ACCESS_TOKEN")
+    }
+  }
+
   // ============================================
   // Clientes
   // ============================================
@@ -118,6 +131,40 @@ class API {
 
   async getClienteResumo(id) {
     return this.request(`/clientes/${id}/resumo`)
+  }
+
+  // ============================================
+  // Auth / Usuários
+  // ============================================
+
+  async login(username, password) {
+    return this.request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    })
+  }
+
+  async me() {
+    return this.request("/auth/me")
+  }
+
+  async getUsuarios(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/usuarios/${query ? "?" + query : ""}`)
+  }
+
+  async createUsuario(data) {
+    return this.request("/usuarios/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateUsuario(id, data) {
+    return this.request(`/usuarios/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    })
   }
 
   // ============================================

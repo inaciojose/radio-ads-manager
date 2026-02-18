@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app import models, schemas
 from app.services.veiculacoes_service import (
@@ -123,7 +124,8 @@ def buscar_veiculacao(
 @router.post("/", response_model=schemas.VeiculacaoResponse, status_code=status.HTTP_201_CREATED)
 def criar_veiculacao(
     veiculacao: schemas.VeiculacaoCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Cria uma veiculação manualmente.
@@ -188,7 +190,8 @@ def criar_veiculacao(
 @router.delete("/{veiculacao_id}", response_model=schemas.MessageResponse)
 def deletar_veiculacao(
     veiculacao_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Deleta uma veiculação.
@@ -314,7 +317,8 @@ def processar_veiculacoes(
     data_inicio: Optional[date] = Query(None, description="Data início (padrão: hoje)"),
     data_fim: Optional[date] = Query(None, description="Data fim (padrão: hoje)"),
     force: bool = Query(False, description="Reprocessar mesmo se já processado"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Processa veiculações não processadas, contabilizando-as nos contratos.

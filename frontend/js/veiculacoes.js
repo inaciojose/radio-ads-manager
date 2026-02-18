@@ -45,6 +45,7 @@ function renderVeiculacoes(items) {
 }
 
 async function processarVeiculacoes() {
+  if (!requireWriteAccess()) return
   const data = document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
   try {
     showLoading()

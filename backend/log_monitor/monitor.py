@@ -42,6 +42,7 @@ class Config:
     
     # URL da API
     API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+    API_TOKEN = os.getenv("API_TOKEN")
     
     # Mapa frequência->diretório de logs (separado por ';')
     # Exemplo:
@@ -203,9 +204,11 @@ class APIClient:
     Cliente para comunicação com a API do Radio Ads Manager.
     """
     
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, token: Optional[str] = None):
         self.base_url = base_url
         self.session = requests.Session()
+        if token:
+            self.session.headers.update({"Authorization": f"Bearer {token}"})
     
     def get_arquivo_by_nome(self, nome_arquivo: str) -> Optional[Dict]:
         """
@@ -314,7 +317,7 @@ class LogMonitor:
     def __init__(self, config: Config):
         self.config = config
         self.parser = ZaraLogParser(config)
-        self.api_client = APIClient(config.API_BASE_URL)
+        self.api_client = APIClient(config.API_BASE_URL, config.API_TOKEN)
         self.log_sources = config.parse_log_sources()
         self.veiculacoes_criadas = 0
         self.erros = 0

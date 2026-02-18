@@ -35,8 +35,12 @@ function renderClientes(items) {
         <td>${escapeHtml(c.telefone || "-")}</td>
         <td>${getStatusBadge(c.status, "cliente")}</td>
         <td>
-          <button class="btn btn-sm btn-secondary" onclick="editarCliente(${c.id})">Editar</button>
-          <button class="btn btn-sm btn-danger" onclick="removerCliente(${c.id})">Excluir</button>
+          ${
+            canWrite()
+              ? `<button class="btn btn-sm btn-secondary" onclick="editarCliente(${c.id})">Editar</button>
+                 <button class="btn btn-sm btn-danger" onclick="removerCliente(${c.id})">Excluir</button>`
+              : '<span class="badge badge-secondary">Somente leitura</span>'
+          }
         </td>
       </tr>
     `,
@@ -64,6 +68,7 @@ function searchClientes() {
 }
 
 function showClienteModal(cliente = null) {
+  if (!requireWriteAccess()) return
   document.getElementById("cliente-modal-title").textContent = cliente
     ? "Editar Cliente"
     : "Novo Cliente"
@@ -81,6 +86,7 @@ function showClienteModal(cliente = null) {
 }
 
 async function saveCliente() {
+  if (!requireWriteAccess()) return
   const id = document.getElementById("cliente-id").value
   const payload = {
     nome: document.getElementById("cliente-nome").value.trim(),
@@ -123,6 +129,7 @@ function editarCliente(id) {
 }
 
 async function removerCliente(id) {
+  if (!requireWriteAccess()) return
   if (!confirmAction("Deseja excluir este cliente?")) return
 
   try {

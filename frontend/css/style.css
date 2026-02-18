@@ -196,6 +196,12 @@ body {
   gap: 1rem;
 }
 
+.auth-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .date-time {
   display: flex;
   align-items: center;

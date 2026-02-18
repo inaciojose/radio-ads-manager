@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app import models, schemas
 from app.database import get_db
 
@@ -102,6 +103,7 @@ def buscar_arquivo(
 def criar_arquivo(
     arquivo: schemas.ArquivoAudioCreate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     cliente = db.query(models.Cliente).filter(models.Cliente.id == arquivo.cliente_id).first()
     if not cliente:
@@ -133,6 +135,7 @@ def atualizar_arquivo(
     arquivo_id: int,
     arquivo_update: schemas.ArquivoAudioUpdate,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:
@@ -154,6 +157,7 @@ def atualizar_arquivo(
 def toggle_arquivo_ativo(
     arquivo_id: int,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:
@@ -172,6 +176,7 @@ def toggle_arquivo_ativo(
 def deletar_arquivo(
     arquivo_id: int,
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:

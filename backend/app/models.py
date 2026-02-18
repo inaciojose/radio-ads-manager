@@ -12,6 +12,29 @@ from app.database import Base
 
 
 # ============================================
+# MODELO: Usuario
+# ============================================
+
+class Usuario(Base):
+    """
+    Usuário do sistema para autenticação e autorização.
+    """
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(60), nullable=False, unique=True, index=True)
+    nome = Column(String(120), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="operador")  # admin|operador
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Usuario(id={self.id}, username='{self.username}', role='{self.role}')>"
+
+
+# ============================================
 # MODELO: Cliente
 # ============================================
 

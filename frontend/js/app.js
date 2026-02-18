@@ -6,6 +6,107 @@
 const appState = {
   currentPage: "dashboard",
   apiOnline: false,
+  user: null,
+  role: "convidado",
+}
+
+function canWrite() {
+  return appState.role === "admin" || appState.role === "operador"
+}
+
+function canManageUsers() {
+  return appState.role === "admin"
+}
+
+function requireWriteAccess(message = "Esta ação exige login.") {
+  if (canWrite()) return true
+  showToast(message, "warning")
+  showLoginModal()
+  return false
+}
+
+function updateAuthUI() {
+  const badge = document.getElementById("current-user-badge")
+  const btnLogin = document.getElementById("btn-login")
+  const btnLogout = document.getElementById("btn-logout")
+
+  if (appState.user) {
+    badge.textContent = `${appState.user.nome} (${appState.role})`
+    badge.className = "badge badge-info"
+    btnLogin.style.display = "none"
+    btnLogout.style.display = "inline-flex"
+  } else {
+    badge.textContent = "Convidado"
+    badge.className = "badge badge-secondary"
+    btnLogin.style.display = "inline-flex"
+    btnLogout.style.display = "none"
+  }
+
+  document.querySelectorAll("[data-requires-write='true']").forEach((el) => {
+    el.style.display = canWrite() ? "inline-flex" : "none"
+  })
+}
+
+async function restoreSession() {
+  if (!api.token) {
+    appState.user = null
+    appState.role = "convidado"
+    updateAuthUI()
+    return
+  }
+
+  try {
+    const me = await api.me()
+    appState.user = me
+    appState.role = me.role
+  } catch {
+    api.setAuthToken(null)
+    appState.user = null
+    appState.role = "convidado"
+  }
+
+  updateAuthUI()
+}
+
+function showLoginModal() {
+  document.getElementById("login-username").value = ""
+  document.getElementById("login-password").value = ""
+  openModal("modal-login")
+}
+
+async function login() {
+  const username = document.getElementById("login-username").value.trim()
+  const password = document.getElementById("login-password").value
+
+  if (!username || !password) {
+    showToast("Informe usuário e senha", "warning")
+    return
+  }
+
+  try {
+    showLoading()
+    const payload = await api.login(username, password)
+    api.setAuthToken(payload.access_token)
+    appState.user = payload.usuario
+    appState.role = payload.usuario.role
+    updateAuthUI()
+    closeModal()
+    showToast("Sessão iniciada", "success")
+    await loadPageData(appState.currentPage)
+  } catch (error) {
+    showToast(error.message || "Erro ao autenticar", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+function logout() {
+  api.setAuthToken(null)
+  appState.user = null
+  appState.role = "convidado"
+  updateAuthUI()
+  showToast("Sessão finalizada", "info")
+  loadPageData(appState.currentPage)
 }
 
 // Verificar status da API
@@ -98,6 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Verificar API
   await checkAPIStatus()
+  await restoreSession()
 
   // Carregar dashboard
   loadDashboard()

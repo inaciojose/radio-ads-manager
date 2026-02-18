@@ -304,6 +304,62 @@ class ResumoCliente(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Auth e Usuários
+# ============================================
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UsuarioBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=60)
+    nome: str = Field(..., min_length=3, max_length=120)
+    role: str = Field(default="operador")
+    ativo: bool = True
+
+    @validator("role")
+    def validar_role(cls, v):
+        if v not in ["admin", "operador"]:
+            raise ValueError('Role deve ser "admin" ou "operador"')
+        return v
+
+
+class UsuarioCreate(UsuarioBase):
+    password: str = Field(..., min_length=6)
+
+
+class UsuarioUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=3, max_length=120)
+    role: Optional[str] = None
+    ativo: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=6)
+
+    @validator("role")
+    def validar_role_update(cls, v):
+        if v is None:
+            return v
+        if v not in ["admin", "operador"]:
+            raise ValueError('Role deve ser "admin" ou "operador"')
+        return v
+
+
+class UsuarioResponse(UsuarioBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    usuario: UsuarioResponse
+
+
+# ============================================
 # SCHEMAS: Respostas Padrão
 # ============================================
 

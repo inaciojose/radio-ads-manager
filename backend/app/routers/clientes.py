@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app import models, schemas
 
@@ -103,7 +104,8 @@ def buscar_cliente(
 @router.post("/", response_model=schemas.ClienteResponse, status_code=status.HTTP_201_CREATED)
 def criar_cliente(
     cliente: schemas.ClienteCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Cria um novo cliente.
@@ -146,7 +148,8 @@ def criar_cliente(
 def atualizar_cliente(
     cliente_id: int,
     cliente_update: schemas.ClienteUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Atualiza os dados de um cliente.
@@ -200,7 +203,8 @@ def atualizar_cliente(
 @router.delete("/{cliente_id}", response_model=schemas.MessageResponse)
 def deletar_cliente(
     cliente_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Deleta um cliente.

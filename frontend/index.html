@@ -65,6 +65,15 @@
           <h1 id="page-title">Dashboard</h1>
         </div>
         <div class="header-right">
+          <div class="auth-info">
+            <span id="current-user-badge" class="badge badge-secondary">Convidado</span>
+            <button id="btn-login" class="btn btn-primary" onclick="showLoginModal()">
+              <i class="fas fa-sign-in-alt"></i> Iniciar Sessão
+            </button>
+            <button id="btn-logout" class="btn btn-secondary" onclick="logout()" style="display: none">
+              <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+          </div>
           <div class="date-time">
             <i class="fas fa-calendar"></i>
             <span id="current-date"></span>
@@ -166,7 +175,7 @@
         <!-- Clientes Page -->
         <div id="page-clientes" class="page">
           <div class="page-header">
-            <button class="btn btn-primary" onclick="showClienteModal()">
+            <button class="btn btn-primary" data-requires-write="true" onclick="showClienteModal()">
               <i class="fas fa-plus"></i> Novo Cliente
             </button>
             <div class="search-box">
@@ -206,7 +215,7 @@
         <!-- Contratos Page -->
         <div id="page-contratos" class="page">
           <div class="page-header">
-            <button class="btn btn-primary" onclick="showContratoModal()">
+            <button class="btn btn-primary" data-requires-write="true" onclick="showContratoModal()">
               <i class="fas fa-plus"></i> Novo Contrato
             </button>
             <div class="search-box">
@@ -284,7 +293,7 @@
                 onchange="loadVeiculacoes()"
               />
             </div>
-            <button class="btn btn-success" onclick="processarVeiculacoes()">
+            <button class="btn btn-success" data-requires-write="true" onclick="processarVeiculacoes()">
               <i class="fas fa-cogs"></i> Processar Veiculações
             </button>
           </div>
@@ -315,7 +324,7 @@
         <!-- Arquivos Page -->
         <div id="page-arquivos" class="page">
           <div class="page-header">
-            <button class="btn btn-primary" onclick="showArquivoModal()">
+            <button class="btn btn-primary" data-requires-write="true" onclick="showArquivoModal()">
               <i class="fas fa-plus"></i> Novo Arquivo
             </button>
             <div class="filters">
@@ -638,6 +647,34 @@
 
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Login Modal -->
+    <div id="modal-login" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Iniciar Sessão</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-login" onsubmit="event.preventDefault(); login();">
+            <div class="form-group">
+              <label>Usuário</label>
+              <input type="text" id="login-username" required />
+            </div>
+            <div class="form-group">
+              <label>Senha</label>
+              <input type="password" id="login-password" required />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="login()">Entrar</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
