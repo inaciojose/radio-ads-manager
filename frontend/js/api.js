@@ -13,13 +13,19 @@ class API {
    */
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`
+    const controller = new AbortController()
+    const timeoutMs = CONFIG.REQUEST_TIMEOUT || 10000
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
     const config = {
       ...options,
+      signal: controller.signal,
       headers: {
-        "Content-Type": "application/json",
         ...options.headers,
       },
+    }
+    if (options.body && !config.headers["Content-Type"]) {
+      config.headers["Content-Type"] = "application/json"
     }
 
     try {
@@ -32,11 +38,37 @@ class API {
         throw new Error(error.detail || error.message || "Erro na requisição")
       }
 
+      if (response.status === 204) return null
       return await response.json()
     } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error(`Tempo limite excedido (${timeoutMs}ms)`)
+      }
       console.error("API Error:", error)
       throw error
+    } finally {
+      clearTimeout(timeoutId)
     }
+  }
+
+  async fetchAllPages(fetchPage, baseParams = {}) {
+    const pageSize = Math.min(CONFIG.DEFAULT_PAGE_SIZE || 200, 1000)
+    let skip = 0
+    const allItems = []
+
+    while (true) {
+      const page = await fetchPage({
+        ...baseParams,
+        skip,
+        limit: pageSize,
+      })
+      allItems.push(...page)
+
+      if (page.length < pageSize) break
+      skip += pageSize
+    }
+
+    return allItems
   }
 
   // ============================================
@@ -54,6 +86,10 @@ class API {
   async getClientes(params = {}) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/clientes/${query ? "?" + query : ""}`)
+  }
+
+  async getAllClientes(params = {}) {
+    return this.fetchAllPages((pageParams) => this.getClientes(pageParams), params)
   }
 
   async getCliente(id) {
@@ -91,6 +127,10 @@ class API {
   async getContratos(params = {}) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/contratos/${query ? "?" + query : ""}`)
+  }
+
+  async getAllContratos(params = {}) {
+    return this.fetchAllPages((pageParams) => this.getContratos(pageParams), params)
   }
 
   async getContrato(id) {
@@ -141,6 +181,10 @@ class API {
     return this.request(`/veiculacoes/${query ? "?" + query : ""}`)
   }
 
+  async getAllVeiculacoes(params = {}) {
+    return this.fetchAllPages((pageParams) => this.getVeiculacoes(pageParams), params)
+  }
+
   async getVeiculacao(id) {
     return this.request(`/veiculacoes/${id}`)
   }
@@ -189,6 +233,10 @@ class API {
   async getArquivos(params = {}) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/arquivos/${query ? "?" + query : ""}`)
+  }
+
+  async getAllArquivos(params = {}) {
+    return this.fetchAllPages((pageParams) => this.getArquivos(pageParams), params)
   }
 
   async getArquivo(id) {

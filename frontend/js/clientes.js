@@ -7,7 +7,7 @@ let clientesCache = []
 async function loadClientes() {
   try {
     showLoading()
-    clientesCache = await api.getClientes({ limit: 1000 })
+    clientesCache = await api.getAllClientes()
     renderClientes(clientesCache)
   } catch (error) {
     showToast(error.message || "Erro ao carregar clientes", "error")

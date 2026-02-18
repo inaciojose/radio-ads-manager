@@ -7,8 +7,8 @@ async function loadDashboard() {
     showLoading()
 
     const [clientes, contratos, resumoHoje, recentes] = await Promise.all([
-      api.getClientes({ status: "ativo", limit: 1000 }),
-      api.getContratos({ status_contrato: "ativo", limit: 1000 }),
+      api.getAllClientes({ status: "ativo" }),
+      api.getAllContratos({ status_contrato: "ativo" }),
       api.getVeiculacoesHoje(),
       api.getVeiculacoesDetalhadas({ limit: 10 }),
     ])

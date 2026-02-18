@@ -2,9 +2,12 @@
  * config.js - Configurações da Aplicação
  */
 
+const defaultApiBaseURL = `${window.location.protocol}//${window.location.hostname}:8000`
+
 const CONFIG = {
-  // URL da API
-  API_BASE_URL: "http://localhost:8000",
+  // URL da API (permite override com localStorage.RADIO_ADS_API_BASE_URL)
+  API_BASE_URL:
+    window.localStorage.getItem("RADIO_ADS_API_BASE_URL") || defaultApiBaseURL,
 
   // Intervalo de atualização automática (em milissegundos)
   AUTO_REFRESH_INTERVAL: 30000, // 30 segundos
@@ -13,7 +16,7 @@ const CONFIG = {
   REQUEST_TIMEOUT: 10000, // 10 segundos
 
   // Paginação
-  DEFAULT_PAGE_SIZE: 50,
+  DEFAULT_PAGE_SIZE: 500,
 
   // Formatos
   DATE_FORMAT: "DD/MM/YYYY",
