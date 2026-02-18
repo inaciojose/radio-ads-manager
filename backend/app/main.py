@@ -36,8 +36,12 @@ async def lifespan(app: FastAPI):
     # Mostrar informações do banco
     db_info = get_database_info()
     print(f"📊 Banco de dados: {db_info['type']}")
-    print(f"📁 Local: {db_info['path']}")
-    print(f"💾 Tamanho: {db_info['size_mb']} MB")
+    if db_info["type"] == "SQLite":
+        print(f"📁 Local: {db_info['path']}")
+        print(f"💾 Tamanho: {db_info['size_mb']} MB")
+    else:
+        print(f"🔗 URL: {db_info['url']}")
+        print(f"🔌 Conectado: {db_info.get('connected', False)}")
     
     print("✅ Aplicação pronta!")
     print("📖 Documentação: http://localhost:8000/docs")
