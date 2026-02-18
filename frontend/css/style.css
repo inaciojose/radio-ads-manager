@@ -543,6 +543,37 @@ body {
   gap: 1rem;
 }
 
+.pagination-bar {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pagination-bar #contratos-page-info {
+  min-width: 140px;
+  text-align: center;
+  color: var(--gray);
+  font-size: 0.875rem;
+}
+
+#contrato-itens-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contrato-item-edit-row {
+  border: 1px solid var(--gray-light);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+}
+
+.contrato-item-edit-row .form-row {
+  grid-template-columns: 2fr 1fr;
+}
+
 /* ============================================
    MODALS
    ============================================ */

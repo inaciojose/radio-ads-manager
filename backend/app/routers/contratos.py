@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -28,6 +28,7 @@ def listar_contratos(
     status_contrato: Optional[str] = Query(None),
     status_nf: Optional[str] = Query(None),
     frequencia: Optional[str] = Query(None),
+    busca: Optional[str] = Query(None, description="Busca por número de contrato ou cliente"),
     db: Session = Depends(get_db),
 ):
     query = db.query(models.Contrato)
@@ -40,6 +41,15 @@ def listar_contratos(
         query = query.filter(models.Contrato.status_nf == status_nf)
     if frequencia:
         query = query.filter(models.Contrato.frequencia == frequencia)
+    if busca:
+        pattern = f"%{busca}%"
+        query = query.join(models.Cliente).filter(
+            or_(
+                models.Contrato.numero_contrato.ilike(pattern),
+                models.Cliente.nome.ilike(pattern),
+                models.Cliente.cnpj_cpf.ilike(pattern),
+            )
+        )
 
     return (
         query.order_by(models.Contrato.created_at.desc())
@@ -187,6 +197,35 @@ def adicionar_item_contrato(
         observacoes=item.observacoes,
     )
     db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@router.put(
+    "/{contrato_id}/itens/{item_id}",
+    response_model=schemas.ContratoItemResponse,
+)
+def atualizar_item_contrato(
+    contrato_id: int,
+    item_id: int,
+    item_update: schemas.ContratoItemUpdate,
+    db: Session = Depends(get_db),
+):
+    db_item = db.query(models.ContratoItem).filter(
+        models.ContratoItem.id == item_id,
+        models.ContratoItem.contrato_id == contrato_id,
+    ).first()
+    if not db_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item {item_id} do contrato {contrato_id} nao encontrado",
+        )
+
+    update_data = item_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_item, field, value)
+
     db.commit()
     db.refresh(db_item)
     return db_item

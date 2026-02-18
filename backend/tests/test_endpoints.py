@@ -124,6 +124,72 @@ def test_reprocessamento_force_nao_duplica_contagem(db):
     assert contrato_atualizado_2.itens[0].quantidade_executada == 1
 
 
+def test_atualizar_item_contrato_altera_quantidade(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Item",
+            cnpj_cpf="44.444.444/0001-44",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            valor_total=1000,
+            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=10)],
+        ),
+        db=db,
+    )
+
+    item = contrato.itens[0]
+    atualizado = contratos_router.atualizar_item_contrato(
+        contrato_id=contrato.id,
+        item_id=item.id,
+        item_update=schemas.ContratoItemUpdate(
+            quantidade_contratada=25,
+            tipo_programa="esporte",
+        ),
+        db=db,
+    )
+    assert atualizado.quantidade_contratada == 25
+    assert atualizado.tipo_programa == "esporte"
+
+
+def test_listar_contratos_com_busca_por_cliente(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Busca Especial",
+            cnpj_cpf="55.555.555/0001-55",
+        ),
+        db=db,
+    )
+    contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            valor_total=500,
+            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=5)],
+        ),
+        db=db,
+    )
+
+    encontrados = contratos_router.listar_contratos(
+        skip=0,
+        limit=20,
+        cliente_id=None,
+        status_contrato=None,
+        status_nf=None,
+        frequencia=None,
+        busca="Especial",
+        db=db,
+    )
+    assert len(encontrados) == 1
+    assert encontrados[0].cliente_id == cliente.id
+
+
 def test_criar_veiculacao_idempotente_nao_duplica_registro(db):
     cliente = clientes_router.criar_cliente(
         schemas.ClienteCreate(

@@ -80,6 +80,13 @@ class ContratoItemCreate(ContratoItemBase):
     pass
 
 
+class ContratoItemUpdate(BaseModel):
+    """Schema para atualizar item de contrato"""
+    tipo_programa: Optional[str] = None
+    quantidade_contratada: Optional[int] = Field(None, gt=0)
+    observacoes: Optional[str] = None
+
+
 class ContratoItemResponse(ContratoItemBase):
     """Schema para retornar item de contrato"""
     id: int

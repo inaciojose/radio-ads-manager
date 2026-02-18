@@ -151,6 +151,13 @@ class API {
     })
   }
 
+  async updateContratoItem(contratoId, itemId, data) {
+    return this.request(`/contratos/${contratoId}/itens/${itemId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  }
+
   async updateNotaFiscal(id, params) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/contratos/${id}/nota-fiscal?${query}`, {

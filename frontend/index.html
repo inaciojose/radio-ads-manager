@@ -209,6 +209,15 @@
             <button class="btn btn-primary" onclick="showContratoModal()">
               <i class="fas fa-plus"></i> Novo Contrato
             </button>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-contratos"
+                placeholder="Buscar número/cliente..."
+                onkeyup="searchContratos()"
+              />
+            </div>
             <div class="filters">
               <select id="filter-contrato-status" onchange="loadContratos()">
                 <option value="">Todos os Status</option>
@@ -221,6 +230,12 @@
                 <option value="pendente">NF Pendente</option>
                 <option value="emitida">NF Emitida</option>
                 <option value="paga">NF Paga</option>
+              </select>
+              <select id="filter-contrato-frequencia" onchange="loadContratos()">
+                <option value="">Todas as Frequências</option>
+                <option value="ambas">Ambas</option>
+                <option value="102.7">102.7</option>
+                <option value="104.7">104.7</option>
               </select>
             </div>
           </div>
@@ -246,6 +261,15 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="pagination-bar">
+              <button id="contratos-prev" class="btn btn-secondary" onclick="changeContratosPage(-1)">
+                <i class="fas fa-chevron-left"></i> Anterior
+              </button>
+              <span id="contratos-page-info">Página 1</span>
+              <button id="contratos-next" class="btn btn-secondary" onclick="changeContratosPage(1)">
+                Próxima <i class="fas fa-chevron-right"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -473,7 +497,7 @@
               </div>
             </div>
 
-            <div id="contrato-item-section">
+            <div id="contrato-item-create-section">
               <h4>Item do Contrato</h4>
               <div class="form-row">
                 <div class="form-group">
@@ -491,6 +515,11 @@
               </div>
             </div>
 
+            <div id="contrato-item-edit-section" style="display: none">
+              <h4>Itens do Contrato</h4>
+              <div id="contrato-itens-edit-list"></div>
+            </div>
+
             <div class="form-group">
               <label>Observações</label>
               <textarea id="contrato-observacoes" rows="3"></textarea>
@@ -500,6 +529,43 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="saveContrato()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nota Fiscal Modal -->
+    <div id="modal-nota-fiscal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Atualizar Nota Fiscal</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-nota-fiscal">
+            <input type="hidden" id="nf-contrato-id" />
+            <div class="form-group">
+              <label>Status NF *</label>
+              <select id="nf-status" required>
+                <option value="pendente">Pendente</option>
+                <option value="emitida">Emitida</option>
+                <option value="paga">Paga</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Número NF</label>
+              <input type="text" id="nf-numero" />
+            </div>
+            <div class="form-group">
+              <label>Data Emissão</label>
+              <input type="date" id="nf-data-emissao" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveNotaFiscal()">Salvar</button>
         </div>
       </div>
     </div>
