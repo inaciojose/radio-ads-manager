@@ -34,6 +34,7 @@ def listar_veiculacoes(
     data_fim: Optional[date] = Query(None, description="Filtrar por data fim"),
     cliente_id: Optional[int] = Query(None, description="Filtrar por cliente"),
     arquivo_id: Optional[int] = Query(None, description="Filtrar por arquivo"),
+    frequencia: Optional[str] = Query(None, description="Filtrar por frequência (102.7/104.7)"),
     tipo_programa: Optional[str] = Query(None, description="Filtrar por tipo de programa"),
     processado: Optional[bool] = Query(None, description="Filtrar por status de processamento"),
     db: Session = Depends(get_db)
@@ -61,6 +62,9 @@ def listar_veiculacoes(
     
     if arquivo_id:
         query = query.filter(models.Veiculacao.arquivo_audio_id == arquivo_id)
+
+    if frequencia:
+        query = query.filter(models.Veiculacao.frequencia == frequencia)
     
     if cliente_id:
         # Join com arquivo_audio para filtrar por cliente
@@ -408,6 +412,7 @@ def listar_veiculacoes_detalhadas(
     veiculacoes = db.query(
         models.Veiculacao.id,
         models.Veiculacao.data_hora,
+        models.Veiculacao.frequencia,
         models.Veiculacao.tipo_programa,
         models.Veiculacao.processado,
         models.ArquivoAudio.nome_arquivo.label('arquivo_nome'),
@@ -431,6 +436,7 @@ def listar_veiculacoes_detalhadas(
         {
             "id": v.id,
             "data_hora": v.data_hora,
+            "frequencia": v.frequencia,
             "tipo_programa": v.tipo_programa,
             "processado": v.processado,
             "arquivo_nome": v.arquivo_nome,

@@ -12,6 +12,7 @@ def criar_contrato_com_itens(db: Session, contrato: schemas.ContratoCreate):
         numero_contrato=models.criar_numero_contrato(db),
         data_inicio=contrato.data_inicio,
         data_fim=contrato.data_fim,
+        frequencia=contrato.frequencia,
         valor_total=contrato.valor_total,
         status_contrato=contrato.status_contrato,
         status_nf=contrato.status_nf,
@@ -34,4 +35,3 @@ def criar_contrato_com_itens(db: Session, contrato: schemas.ContratoCreate):
     db.commit()
     db.refresh(db_contrato)
     return db_contrato
-

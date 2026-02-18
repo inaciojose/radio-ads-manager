@@ -66,6 +66,7 @@ class Contrato(Base):
     numero_contrato = Column(String(50), unique=True, index=True)
     data_inicio = Column(Date, nullable=False)
     data_fim = Column(Date, nullable=False)
+    frequencia = Column(String(10), default="ambas")  # '102.7', '104.7' ou 'ambas'
     valor_total = Column(Float)
     status_contrato = Column(String(20), default="ativo")  # 'ativo', 'concluído', 'cancelado'
     status_nf = Column(String(20), default="pendente")  # 'pendente', 'emitida', 'paga'
@@ -170,6 +171,7 @@ class Veiculacao(Base):
     arquivo_audio_id = Column(Integer, ForeignKey("arquivos_audio.id"), nullable=False)
     contrato_id = Column(Integer, ForeignKey("contratos.id"))
     data_hora = Column(DateTime(timezone=True), nullable=False, index=True)
+    frequencia = Column(String(10), index=True)  # Frequência onde a chamada foi executada
     tipo_programa = Column(String(50))
     fonte = Column(String(50), default="zara_log")  # De onde veio a informação
     processado = Column(Boolean, default=False, index=True)  # Se já foi contabilizado

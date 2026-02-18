@@ -101,6 +101,7 @@ class ContratoBase(BaseModel):
     cliente_id: int
     data_inicio: date
     data_fim: date
+    frequencia: str = Field(default="ambas", description="Frequência: 102.7, 104.7 ou ambas")
     valor_total: Optional[float] = Field(None, ge=0, description="Valor total do contrato")
     status_contrato: str = Field(default="ativo")
     status_nf: str = Field(default="pendente")
@@ -118,6 +119,12 @@ class ContratoBase(BaseModel):
     def validar_status_nf(cls, v):
         if v not in ['pendente', 'emitida', 'paga']:
             raise ValueError('Status NF inválido')
+        return v
+
+    @validator('frequencia')
+    def validar_frequencia(cls, v):
+        if v not in ['102.7', '104.7', 'ambas']:
+            raise ValueError('Frequência deve ser "102.7", "104.7" ou "ambas"')
         return v
     
     @validator('data_fim')
@@ -137,12 +144,21 @@ class ContratoUpdate(BaseModel):
     """Schema para atualizar contrato"""
     data_inicio: Optional[date] = None
     data_fim: Optional[date] = None
+    frequencia: Optional[str] = None
     valor_total: Optional[float] = None
     status_contrato: Optional[str] = None
     status_nf: Optional[str] = None
     numero_nf: Optional[str] = None
     data_emissao_nf: Optional[date] = None
     observacoes: Optional[str] = None
+
+    @validator('frequencia')
+    def validar_frequencia_update(cls, v):
+        if v is None:
+            return v
+        if v not in ['102.7', '104.7', 'ambas']:
+            raise ValueError('Frequência deve ser "102.7", "104.7" ou "ambas"')
+        return v
 
 
 class ContratoResponse(ContratoBase):
@@ -218,8 +234,17 @@ class VeiculacaoBase(BaseModel):
     arquivo_audio_id: int
     contrato_id: Optional[int] = None
     data_hora: datetime
+    frequencia: Optional[str] = Field(None, description='Frequência: 102.7 ou 104.7')
     tipo_programa: Optional[str] = None
     fonte: str = "zara_log"
+
+    @validator('frequencia')
+    def validar_frequencia_veiculacao(cls, v):
+        if v is None:
+            return v
+        if v not in ['102.7', '104.7']:
+            raise ValueError('Frequência da veiculação deve ser "102.7" ou "104.7"')
+        return v
 
 
 class VeiculacaoCreate(VeiculacaoBase):
@@ -240,6 +265,7 @@ class VeiculacaoDetalhada(BaseModel):
     """Schema para veiculação com informações completas"""
     id: int
     data_hora: datetime
+    frequencia: Optional[str]
     tipo_programa: Optional[str]
     processado: bool
     arquivo_nome: str

@@ -52,6 +52,11 @@ cd backend
 docker compose up -d postgres
 ```
 
+Configuração de ambiente (`backend/.env`):
+- `DATABASE_URL=postgresql+psycopg2://radio_user:radio_pass@localhost:5432/radio_ads`
+- `LOG_SOURCES=102.7=K:\Registro FM;104.7=K:\Registro 104_7`
+- `CHAMADAS_BASE_PATH=J:\AZARASTUDIO\CHAMADAS`
+
 ## Migrações (Alembic)
 ```bash
 cd backend

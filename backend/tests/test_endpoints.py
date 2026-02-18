@@ -12,7 +12,7 @@ from app.main import health_check
 from app.routers import clientes as clientes_router
 from app.routers import contratos as contratos_router
 from app.routers import veiculacoes as veiculacoes_router
-from log_monitor.monitor import APIClient
+from log_monitor.monitor import APIClient, Config, ZaraLogParser
 
 
 @pytest.fixture(autouse=True)
@@ -146,3 +146,67 @@ def test_monitor_busca_arquivo_por_nome_exato():
     arquivo = api_client.get_arquivo_by_nome("spot_cliente.mp3")
     assert arquivo is not None
     assert arquivo["id"] == 2
+
+
+def test_processamento_respeita_frequencia_contrato(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Frequencia",
+            cnpj_cpf="11.111.111/0001-11",
+        ),
+        db=db,
+    )
+
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            frequencia="102.7",
+            valor_total=1000,
+            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=10)],
+        ),
+        db=db,
+    )
+
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_freq.mp3",
+        titulo="Spot freq",
+    )
+    db.add(arquivo)
+    db.flush()
+
+    veiculacao = models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime.now(),
+        frequencia="104.7",
+        tipo_programa="musical",
+        fonte="teste",
+    )
+    db.add(veiculacao)
+    db.commit()
+
+    veiculacoes_router.processar_veiculacoes(
+        data_inicio=date.today(),
+        data_fim=date.today(),
+        db=db,
+    )
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.itens[0].quantidade_executada == 0
+
+
+def test_parser_linha_real_com_pasta_chamadas():
+    config = Config()
+    parser = ZaraLogParser(config)
+    base_date = datetime(2026, 2, 16)
+    line = (
+        "06:42:47\tInício\tMain\tdefault\t"
+        r"J:\AZARASTUDIO\CHAMADAS\(59) PARAISO HOTEL FAMILIAR (17-10-14).mp3"
+    )
+
+    parsed = parser.parse_line(line, base_date, "102.7")
+    assert parsed is not None
+    assert parsed["nome_arquivo"] == "(59) PARAISO HOTEL FAMILIAR (17-10-14).mp3"
+    assert parsed["frequencia"] == "102.7"

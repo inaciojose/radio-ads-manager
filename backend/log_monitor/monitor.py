@@ -15,10 +15,12 @@ COMO FUNCIONA:
 import os
 import time
 import re
+import unicodedata
+import ntpath
 import requests
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import logging
@@ -41,28 +43,38 @@ class Config:
     # URL da API
     API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
     
-    # Pasta onde o Zara Studio grava os logs
-    # AJUSTE ESTE CAMINHO PARA O SEU AMBIENTE!
-    LOG_DIR = os.getenv("ZARA_LOG_DIR", "/caminho/para/logs/zara")
+    # Mapa frequência->diretório de logs (separado por ';')
+    # Exemplo:
+    #   LOG_SOURCES="102.7=K:\\Registro FM;104.7=K:\\Registro 104_7"
+    LOG_SOURCES = os.getenv(
+        "LOG_SOURCES",
+        "102.7=K:\\Registro FM;104.7=K:\\Registro 104_7"
+    )
     
     # Padrão do nome dos arquivos de log
-    # Exemplo: zara_2024-01-15.log
-    LOG_FILE_PATTERN = r"zara_\d{4}-\d{2}-\d{2}\.log"
+    # Exemplo: 2026-02-16.log
+    LOG_FILE_PATTERN = r"\d{4}-\d{2}-\d{2}\.log$"
     
     # Intervalo para processar veiculações (em segundos)
     PROCESS_INTERVAL = 300  # 5 minutos
     
-    # Padrão de linha de log do Zara Studio
-    # AJUSTE CONFORME O FORMATO DOS SEUS LOGS!
-    # Exemplo de linha: "14:30:25 | PLAY | supermercado_oferta_30s.mp3 | Musical"
-    LOG_LINE_PATTERN = r"(\d{2}:\d{2}:\d{2})\s*\|\s*PLAY\s*\|\s*([^\|]+)\s*\|\s*([^\|]+)"
-    
-    # Palavras-chave que indicam que é uma propaganda
-    # Arquivos que contenham essas palavras serão considerados propagandas
-    PROPAGANDA_KEYWORDS = ["comercial", "anuncio", "propaganda", "spot", "ad_"]
-    
-    # Palavras-chave que indicam que NÃO é propaganda (vinhetas, músicas, etc.)
-    IGNORE_KEYWORDS = ["vinheta", "musica", "trilha", "jingle", "abertura", "passagem"]
+    # Prefixo canônico para identificar propagandas nos logs da rádio.
+    # Aceita subpastas dentro desse caminho.
+    CHAMADAS_BASE_PATH = os.getenv("CHAMADAS_BASE_PATH", r"J:\AZARASTUDIO\CHAMADAS")
+
+    def parse_log_sources(self) -> List[Tuple[str, str]]:
+        sources: List[Tuple[str, str]] = []
+        raw = self.LOG_SOURCES
+        for chunk in raw.split(";"):
+            item = chunk.strip()
+            if not item or "=" not in item:
+                continue
+            freq, path = item.split("=", 1)
+            freq = freq.strip()
+            path = path.strip()
+            if freq and path:
+                sources.append((freq, path))
+        return sources
 
 
 # ============================================
@@ -77,9 +89,17 @@ class ZaraLogParser:
     
     def __init__(self, config: Config):
         self.config = config
-        self.log_pattern = re.compile(config.LOG_LINE_PATTERN)
+        self.log_pattern = re.compile(r"^\d{2}:\d{2}:\d{2}$")
+
+    def _normalizar_texto(self, valor: str) -> str:
+        texto = unicodedata.normalize("NFKD", valor)
+        texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+        return texto.lower().strip()
+
+    def _normalizar_path(self, valor: str) -> str:
+        return valor.replace("/", "\\").strip().lower()
     
-    def parse_file(self, filepath: str, date: datetime) -> List[Dict]:
+    def parse_file(self, filepath: str, date: datetime, frequencia: str) -> List[Dict]:
         """
         Lê um arquivo de log e extrai as propagandas tocadas.
         
@@ -93,10 +113,10 @@ class ZaraLogParser:
         propagandas = []
         
         try:
-            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(filepath, "r", encoding="cp1252", errors="ignore") as f:
                 for line_num, line in enumerate(f, 1):
                     try:
-                        propaganda = self.parse_line(line, date)
+                        propaganda = self.parse_line(line, date, frequencia)
                         if propaganda:
                             propagandas.append(propaganda)
                     except Exception as e:
@@ -108,7 +128,7 @@ class ZaraLogParser:
         
         return propagandas
     
-    def parse_line(self, line: str, date: datetime) -> Optional[Dict]:
+    def parse_line(self, line: str, date: datetime, frequencia: str) -> Optional[Dict]:
         """
         Faz parse de uma linha do log.
         
@@ -119,34 +139,46 @@ class ZaraLogParser:
         Returns:
             Dicionário com informações da propaganda ou None
         """
-        match = self.log_pattern.match(line.strip())
-        
-        if not match:
+        linha = line.strip()
+        if not linha or linha.startswith("LOG FILE") or linha.startswith("="):
             return None
-        
-        hora_str = match.group(1)  # Ex: "14:30:25"
-        nome_arquivo = match.group(2).strip()  # Ex: "supermercado_oferta_30s.mp3"
-        tipo_programa = match.group(3).strip()  # Ex: "Musical"
-        
-        # Verificar se é propaganda
-        if not self.is_propaganda(nome_arquivo):
+
+        colunas = re.split(r"\t+", linha)
+        if len(colunas) < 5:
             return None
-        
-        # Construir datetime completo
-        hora_parts = hora_str.split(':')
+
+        hora_str = colunas[0].strip()
+        action = self._normalizar_texto(colunas[1])
+        caminho_tocado = colunas[-1].strip()
+
+        if not self.log_pattern.match(hora_str):
+            return None
+
+        # Só considera linhas de início de execução.
+        if not action.startswith("inicio") and not action.startswith("in"):
+            return None
+
+        # Só considera chamadas dentro da pasta padrão da rádio.
+        if not self.is_propaganda(caminho_tocado):
+            return None
+
+        hora_parts = hora_str.split(":")
         data_hora = date.replace(
             hour=int(hora_parts[0]),
             minute=int(hora_parts[1]),
             second=int(hora_parts[2])
         )
-        
+
+        nome_arquivo = ntpath.basename(caminho_tocado)
+
         return {
-            'nome_arquivo': nome_arquivo,
-            'data_hora': data_hora,
-            'tipo_programa': tipo_programa.lower()
+            "nome_arquivo": nome_arquivo,
+            "data_hora": data_hora,
+            "tipo_programa": None,
+            "frequencia": frequencia,
         }
     
-    def is_propaganda(self, nome_arquivo: str) -> bool:
+    def is_propaganda(self, caminho_arquivo: str) -> bool:
         """
         Verifica se o arquivo é uma propaganda baseado no nome.
         
@@ -155,21 +187,11 @@ class ZaraLogParser:
         2. Se contém palavra de PROPAGANDA → é propaganda
         3. Se não tem nenhuma das duas → considera como propaganda (conservador)
         """
-        nome_lower = nome_arquivo.lower()
-        
-        # Verificar palavras de exclusão
-        for keyword in self.config.IGNORE_KEYWORDS:
-            if keyword in nome_lower:
-                return False
-        
-        # Verificar palavras que indicam propaganda
-        for keyword in self.config.PROPAGANDA_KEYWORDS:
-            if keyword in nome_lower:
-                return True
-        
-        # Por padrão, considera como propaganda
-        # (você pode mudar para False se preferir ser mais conservador)
-        return True
+        caminho_normalizado = self._normalizar_path(caminho_arquivo)
+        base_normalizada = self._normalizar_path(self.config.CHAMADAS_BASE_PATH)
+        if not base_normalizada.endswith("\\"):
+            base_normalizada = f"{base_normalizada}\\"
+        return caminho_normalizado.startswith(base_normalizada)
 
 
 # ============================================
@@ -291,11 +313,13 @@ class LogMonitor:
         self.config = config
         self.parser = ZaraLogParser(config)
         self.api_client = APIClient(config.API_BASE_URL)
+        self.log_sources = config.parse_log_sources()
         self.veiculacoes_criadas = 0
         self.erros = 0
         self.last_process_time = None
+        self._dedupe_cache = set()
     
-    def process_log_file(self, filepath: str, date: datetime):
+    def process_log_file(self, filepath: str, date: datetime, frequencia: str):
         """
         Processa um arquivo de log completo.
         
@@ -306,7 +330,7 @@ class LogMonitor:
         logger.info(f"Processando arquivo: {filepath}")
         
         # Parse do arquivo
-        propagandas = self.parser.parse_file(filepath, date)
+        propagandas = self.parser.parse_file(filepath, date, frequencia)
         logger.info(f"Encontradas {len(propagandas)} propagandas no arquivo")
         
         # Criar veiculações
@@ -332,11 +356,16 @@ class LogMonitor:
             return
         
         # Preparar dados da veiculação
+        dedupe_key = (arquivo["id"], propaganda["data_hora"].isoformat(), propaganda.get("frequencia"))
+        if dedupe_key in self._dedupe_cache:
+            return
+
         veiculacao_data = {
-            'arquivo_audio_id': arquivo['id'],
-            'data_hora': propaganda['data_hora'].isoformat(),
-            'tipo_programa': propaganda['tipo_programa'],
-            'fonte': 'zara_log'
+            "arquivo_audio_id": arquivo["id"],
+            "data_hora": propaganda["data_hora"].isoformat(),
+            "frequencia": propaganda.get("frequencia"),
+            "tipo_programa": propaganda["tipo_programa"],
+            "fonte": "zara_log",
         }
         
         # Criar veiculação
@@ -344,6 +373,7 @@ class LogMonitor:
         
         if veiculacao:
             self.veiculacoes_criadas += 1
+            self._dedupe_cache.add(dedupe_key)
             logger.debug(f"Veiculação criada: {nome_arquivo} às {propaganda['data_hora']}")
         else:
             self.erros += 1
@@ -378,7 +408,7 @@ class LogMonitor:
         Útil para processar logs históricos.
         """
         logger.info("Iniciando em modo BATCH")
-        logger.info(f"Diretório de logs: {self.config.LOG_DIR}")
+        logger.info(f"Fontes de logs: {self.log_sources}")
         
         # Verificar se API está online
         if not self.api_client.check_health():
@@ -388,35 +418,34 @@ class LogMonitor:
         logger.info("API online ✓")
         
         # Listar arquivos de log
-        log_dir = Path(self.config.LOG_DIR)
-        if not log_dir.exists():
-            logger.error(f"Diretório de logs não existe: {self.config.LOG_DIR}")
-            return
-        
-        log_files = sorted(log_dir.glob("*.log"))
-        logger.info(f"Encontrados {len(log_files)} arquivos de log")
-        
-        # Processar cada arquivo
-        for log_file in log_files:
-            try:
-                # Extrair data do nome do arquivo
-                # Exemplo: zara_2024-01-15.log
-                date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', log_file.name)
-                if date_match:
-                    date = datetime(
-                        int(date_match.group(1)),
-                        int(date_match.group(2)),
-                        int(date_match.group(3))
-                    )
-                else:
-                    # Se não conseguir extrair data, usa hoje
-                    date = datetime.now()
-                
-                self.process_log_file(str(log_file), date)
-            
-            except Exception as e:
-                logger.error(f"Erro ao processar {log_file}: {e}")
+        for frequencia, log_dir_raw in self.log_sources:
+            log_dir = Path(log_dir_raw)
+            if not log_dir.exists():
+                logger.warning(f"Diretório não encontrado para frequência {frequencia}: {log_dir_raw}")
                 continue
+
+            log_files = sorted(
+                f for f in log_dir.glob("*.log")
+                if re.match(self.config.LOG_FILE_PATTERN, f.name)
+            )
+            logger.info(f"[{frequencia}] Encontrados {len(log_files)} arquivos de log")
+
+            for log_file in log_files:
+                try:
+                    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", log_file.name)
+                    if date_match:
+                        date = datetime(
+                            int(date_match.group(1)),
+                            int(date_match.group(2)),
+                            int(date_match.group(3))
+                        )
+                    else:
+                        date = datetime.now()
+
+                    self.process_log_file(str(log_file), date, frequencia)
+                except Exception as e:
+                    logger.error(f"Erro ao processar {log_file}: {e}")
+                    continue
         
         # Processar veiculações
         logger.info("\nProcessando veiculações nos contratos...")
@@ -434,7 +463,7 @@ class LogMonitor:
         Processa automaticamente quando detecta mudanças.
         """
         logger.info("Iniciando em modo WATCH (monitoramento em tempo real)")
-        logger.info(f"Monitorando: {self.config.LOG_DIR}")
+        logger.info(f"Monitorando: {self.log_sources}")
         logger.info("Pressione Ctrl+C para parar")
         
         # Verificar se API está online
@@ -445,9 +474,13 @@ class LogMonitor:
         logger.info("API online ✓")
         
         # Configurar watchdog
-        event_handler = LogFileEventHandler(self)
         observer = Observer()
-        observer.schedule(event_handler, self.config.LOG_DIR, recursive=False)
+        for frequencia, log_dir_raw in self.log_sources:
+            if not Path(log_dir_raw).exists():
+                logger.warning(f"Diretório não encontrado para frequência {frequencia}: {log_dir_raw}")
+                continue
+            event_handler = LogFileEventHandler(self, frequencia)
+            observer.schedule(event_handler, log_dir_raw, recursive=False)
         observer.start()
         
         try:
@@ -476,9 +509,10 @@ class LogFileEventHandler(FileSystemEventHandler):
     Detecta quando arquivos de log são modificados.
     """
     
-    def __init__(self, monitor: LogMonitor):
+    def __init__(self, monitor: LogMonitor, frequencia: str):
         self.monitor = monitor
         self.config = monitor.config
+        self.frequencia = frequencia
     
     def on_modified(self, event):
         """Chamado quando um arquivo é modificado"""
@@ -504,7 +538,7 @@ class LogFileEventHandler(FileSystemEventHandler):
         
         # Processar arquivo
         try:
-            self.monitor.process_log_file(event.src_path, date)
+            self.monitor.process_log_file(event.src_path, date, self.frequencia)
         except Exception as e:
             logger.error(f"Erro ao processar arquivo: {e}")
 
@@ -530,7 +564,7 @@ Exemplos de uso:
   python monitor.py watch
 
   # Especificar diretório customizado
-  python monitor.py batch --log-dir /caminho/para/logs
+  python monitor.py batch --log-sources "102.7=/logs/fm;104.7=/logs/104_7"
 
   # Especificar URL da API
   python monitor.py watch --api-url http://192.168.1.100:8000
@@ -544,9 +578,9 @@ Exemplos de uso:
     )
     
     parser.add_argument(
-        '--log-dir',
+        '--log-sources',
         type=str,
-        help='Diretório dos logs do Zara Studio'
+        help='Mapa frequência=diretório separado por ";" (ex: "102.7=/logs/fm;104.7=/logs/104_7")'
     )
     
     parser.add_argument(
@@ -560,8 +594,8 @@ Exemplos de uso:
     # Configurar
     config = Config()
     
-    if args.log_dir:
-        config.LOG_DIR = args.log_dir
+    if args.log_sources:
+        config.LOG_SOURCES = args.log_sources
     
     if args.api_url:
         config.API_BASE_URL = args.api_url

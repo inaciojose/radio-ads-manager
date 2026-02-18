@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
@@ -86,7 +87,20 @@ def processar_veiculacoes_periodo(
                 models.Contrato.status_contrato == "ativo",
                 models.Contrato.data_inicio <= veiculacao.data_hora.date(),
                 models.Contrato.data_fim >= veiculacao.data_hora.date()
-            ).first()
+            )
+
+            # Se a veiculação veio de uma frequência específica, prioriza contratos dessa frequência
+            # e também contratos marcados como "ambas".
+            if veiculacao.frequencia:
+                contrato = contrato.filter(
+                    or_(
+                        models.Contrato.frequencia == veiculacao.frequencia,
+                        models.Contrato.frequencia == "ambas",
+                        models.Contrato.frequencia.is_(None),
+                    )
+                )
+
+            contrato = contrato.first()
 
             if not contrato:
                 veiculacao.processado = True
@@ -125,4 +139,3 @@ def processar_veiculacoes_periodo(
             "erros": erros
         }
     }
-

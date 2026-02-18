@@ -27,6 +27,7 @@ def listar_contratos(
     cliente_id: Optional[int] = Query(None),
     status_contrato: Optional[str] = Query(None),
     status_nf: Optional[str] = Query(None),
+    frequencia: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     query = db.query(models.Contrato)
@@ -37,6 +38,8 @@ def listar_contratos(
         query = query.filter(models.Contrato.status_contrato == status_contrato)
     if status_nf:
         query = query.filter(models.Contrato.status_nf == status_nf)
+    if frequencia:
+        query = query.filter(models.Contrato.frequencia == frequencia)
 
     return (
         query.order_by(models.Contrato.created_at.desc())
@@ -116,6 +119,7 @@ def resumo_cliente_contratos(
             "numero_contrato": c.numero_contrato,
             "data_inicio": c.data_inicio,
             "data_fim": c.data_fim,
+            "frequencia": c.frequencia,
             "status_contrato": c.status_contrato,
             "status_nf": c.status_nf,
         }
