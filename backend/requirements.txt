@@ -9,6 +9,7 @@ uvicorn[standard]==0.27.0  # Servidor para rodar a API
 # Banco de Dados
 sqlalchemy==2.0.25         # ORM - facilita trabalhar com banco de dados
 alembic==1.13.1            # Migrações de banco (controle de versão do schema)
+psycopg2-binary==2.9.9     # Driver PostgreSQL para SQLAlchemy
 
 # Validação de Dados
 pydantic==2.5.3            # Validação automática de dados

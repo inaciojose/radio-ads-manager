@@ -1,35 +1,34 @@
 """
 database.py - Configuração do Banco de Dados
 
-Este arquivo configura a conexão com o banco de dados SQLite
-e cria a "sessão" que usaremos para fazer consultas.
+Suporta PostgreSQL via DATABASE_URL e mantém fallback para SQLite local.
 """
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import os
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base, sessionmaker
+from dotenv import load_dotenv
 
 # ============================================
 # CONFIGURAÇÃO DA CONEXÃO
 # ============================================
 
-# Caminho onde o arquivo do banco será salvo
-# Você pode mudar isso depois para colocar em outro local
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE_PATH = os.path.join(BASE_DIR, "radio_ads.db")
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# String de conexão do SQLite
-# sqlite:/// significa "usar SQLite" e depois vem o caminho do arquivo
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+# Permite uso de PostgreSQL em produção e SQLite como fallback local.
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
+IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 
-# Criar o "engine" - é como se fosse o motor que conecta ao banco
-# check_same_thread=False é necessário para SQLite funcionar com FastAPI
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False},
-    echo=False  # Se True, mostra todas as queries SQL no console (útil para debug)
-)
+engine_kwargs = {"echo": False}
+if IS_SQLITE:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_pre_ping"] = True
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **engine_kwargs)
 
 # SessionLocal é uma "fábrica" de sessões
 # Cada vez que precisamos falar com o banco, criamos uma sessão nova
@@ -74,9 +73,12 @@ def init_db():
     # Importar todos os modelos aqui para que o SQLAlchemy os conheça
     from app import models
     
-    # Criar todas as tabelas
-    Base.metadata.create_all(bind=engine)
-    print(f"✅ Banco de dados inicializado em: {DATABASE_PATH}")
+    if IS_SQLITE:
+        Base.metadata.create_all(bind=engine)
+        print(f"✅ Banco de dados SQLite inicializado em: {SQLALCHEMY_DATABASE_URL}")
+        return
+
+    print("✅ Banco PostgreSQL configurado. Use Alembic para aplicar migrações: `alembic upgrade head`.")
 
 
 # ============================================
@@ -88,9 +90,28 @@ def get_database_info():
     Retorna informações sobre o banco de dados.
     Útil para debug e monitoramento.
     """
+    if IS_SQLITE:
+        exists = os.path.exists(DATABASE_PATH)
+        return {
+            "type": "SQLite",
+            "url": SQLALCHEMY_DATABASE_URL,
+            "path": DATABASE_PATH,
+            "exists": exists,
+            "size_mb": round(os.path.getsize(DATABASE_PATH) / (1024 * 1024), 2) if exists else 0,
+        }
+
+    connected = False
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        connected = True
+    except Exception:
+        connected = False
+
     return {
-        "type": "SQLite",
-        "path": DATABASE_PATH,
-        "exists": os.path.exists(DATABASE_PATH),
-        "size_mb": round(os.path.getsize(DATABASE_PATH) / (1024 * 1024), 2) if os.path.exists(DATABASE_PATH) else 0
+        "type": "PostgreSQL",
+        "url": SQLALCHEMY_DATABASE_URL,
+        "connected": connected,
+        "exists": connected,
+        "size_mb": None,
     }

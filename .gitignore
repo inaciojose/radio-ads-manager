@@ -6,3 +6,5 @@ __pycache__/
 backend/radio_ads.db
 backend/test_logs/
 backend/scripts/test_logs/
+backend/.env
+backend/test_radio_ads.db

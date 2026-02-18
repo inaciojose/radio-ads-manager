@@ -14,6 +14,7 @@ Sistema de gerenciamento de anúncios para rádio com controle de clientes, cont
 ```text
 radio-ads-manager/
 ├── backend/
+│   ├── alembic/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── database.py
@@ -24,7 +25,9 @@ radio-ads-manager/
 │   ├── log_monitor/
 │   ├── scripts/           # scripts manuais de demonstração
 │   ├── tests/             # suíte pytest automatizada
+│   ├── docker-compose.yml
 │   ├── requirements.txt
+│   ├── alembic.ini
 │   └── pytest.ini
 ├── frontend/
 └── docs/
@@ -40,6 +43,25 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+```
+
+## Banco de Dados (PostgreSQL)
+```bash
+cd backend
+docker compose up -d postgres
+```
+
+## Migrações (Alembic)
+```bash
+cd backend
+alembic upgrade head
+```
+
+Se o banco já existir com tabelas criadas anteriormente (sem histórico Alembic), marque a revisão atual:
+```bash
+cd backend
+alembic stamp head
 ```
 
 ## Executar API
@@ -67,8 +89,8 @@ python scripts/sistema_completo_demo.py
 ```
 
 ## Banco de Dados
-- SQLite local: `backend/radio_ads.db`
-- O arquivo é criado automaticamente na primeira execução.
+- Principal: PostgreSQL via `DATABASE_URL` no arquivo `backend/.env`.
+- Fallback local: SQLite (`backend/radio_ads.db`) caso `DATABASE_URL` não esteja configurada.
 
 ## Observações
 - Regras de negócio ficam em `backend/app/services`.

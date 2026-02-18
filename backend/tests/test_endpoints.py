@@ -1,6 +1,10 @@
 from datetime import date, datetime
+import os
 
 import pytest
+
+# Mantém os testes independentes do banco de runtime.
+os.environ["DATABASE_URL"] = "sqlite:///./test_radio_ads.db"
 
 from app import models, schemas
 from app.database import Base, SessionLocal, engine
