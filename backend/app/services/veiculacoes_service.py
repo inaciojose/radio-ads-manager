@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import models
 
 
-def _buscar_item_contabilizado(db: Session, veiculacao: models.Veiculacao):
+def buscar_item_contabilizado(db: Session, veiculacao: models.Veiculacao):
     """
     Resolve qual item de contrato foi (ou seria) contabilizado para a veiculação.
     Mantém a mesma lógica do processamento principal: tenta por tipo_programa e,
@@ -73,7 +73,7 @@ def processar_veiculacoes_periodo(
     for veiculacao in veiculacoes:
         try:
             if force and veiculacao.processado:
-                item_anterior = _buscar_item_contabilizado(db, veiculacao)
+                item_anterior = buscar_item_contabilizado(db, veiculacao)
                 if item_anterior and item_anterior.quantidade_executada > 0:
                     item_anterior.quantidade_executada -= 1
 

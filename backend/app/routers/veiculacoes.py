@@ -9,12 +9,16 @@ mas estes endpoints permitem consultar, corrigir e processar manualmente.
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 
 from app.database import get_db
 from app import models, schemas
-from app.services.veiculacoes_service import processar_veiculacoes_periodo
+from app.services.veiculacoes_service import (
+    buscar_item_contabilizado,
+    processar_veiculacoes_periodo,
+)
 
 
 router = APIRouter(
@@ -147,10 +151,31 @@ def criar_veiculacao(
             detail=f"Arquivo com ID {veiculacao.arquivo_audio_id} não encontrado"
         )
     
+    # Idempotência para evitar duplicidade quando o mesmo evento é recebido mais de uma vez.
+    query_existente = db.query(models.Veiculacao).filter(
+        models.Veiculacao.arquivo_audio_id == veiculacao.arquivo_audio_id,
+        models.Veiculacao.data_hora == veiculacao.data_hora,
+    )
+    if veiculacao.frequencia is None:
+        query_existente = query_existente.filter(models.Veiculacao.frequencia.is_(None))
+    else:
+        query_existente = query_existente.filter(models.Veiculacao.frequencia == veiculacao.frequencia)
+
+    veiculacao_existente = query_existente.first()
+    if veiculacao_existente:
+        return veiculacao_existente
+
     # Criar veiculação
     db_veiculacao = models.Veiculacao(**veiculacao.model_dump())
     db.add(db_veiculacao)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        veiculacao_existente = query_existente.first()
+        if veiculacao_existente:
+            return veiculacao_existente
+        raise
     db.refresh(db_veiculacao)
     
     return db_veiculacao
@@ -185,13 +210,22 @@ def deletar_veiculacao(
         )
     
     foi_processada = veiculacao.processado
+    contador_ajustado = False
+
+    if foi_processada:
+        item = buscar_item_contabilizado(db, veiculacao)
+        if item and item.quantidade_executada > 0:
+            item.quantidade_executada -= 1
+            contador_ajustado = True
     
     db.delete(veiculacao)
     db.commit()
     
     mensagem = "Veiculação deletada com sucesso"
-    if foi_processada:
-        mensagem += " (ATENÇÃO: Veiculação já estava processada - reprocesse os contratos se necessário)"
+    if foi_processada and contador_ajustado:
+        mensagem += " (contador do contrato ajustado automaticamente)"
+    elif foi_processada:
+        mensagem += " (veiculação processada sem item contabilizado para ajuste)"
     
     return {
         "message": mensagem,

@@ -124,6 +124,97 @@ def test_reprocessamento_force_nao_duplica_contagem(db):
     assert contrato_atualizado_2.itens[0].quantidade_executada == 1
 
 
+def test_criar_veiculacao_idempotente_nao_duplica_registro(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Idempotencia",
+            cnpj_cpf="22.222.222/0001-22",
+        ),
+        db=db,
+    )
+
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_idempotente.mp3",
+        titulo="Spot idempotente",
+    )
+    db.add(arquivo)
+    db.flush()
+
+    payload = schemas.VeiculacaoCreate(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime.now(),
+        frequencia="102.7",
+        tipo_programa="musical",
+        fonte="zara_log",
+    )
+
+    primeira = veiculacoes_router.criar_veiculacao(payload, db=db)
+    segunda = veiculacoes_router.criar_veiculacao(payload, db=db)
+
+    assert primeira.id == segunda.id
+    total = db.query(models.Veiculacao).count()
+    assert total == 1
+
+
+def test_deletar_veiculacao_processada_reverte_contador(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Delecao",
+            cnpj_cpf="33.333.333/0001-33",
+        ),
+        db=db,
+    )
+
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            valor_total=1000,
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=10,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_delete.mp3",
+        titulo="Spot delete",
+        duracao_segundos=30,
+    )
+    db.add(arquivo)
+    db.flush()
+
+    veiculacao = veiculacoes_router.criar_veiculacao(
+        schemas.VeiculacaoCreate(
+            arquivo_audio_id=arquivo.id,
+            data_hora=datetime.now(),
+            tipo_programa="musical",
+            fonte="teste",
+        ),
+        db=db,
+    )
+
+    veiculacoes_router.processar_veiculacoes(
+        data_inicio=date.today(),
+        data_fim=date.today(),
+        db=db,
+    )
+    assert contratos_router.buscar_contrato(contrato.id, db=db).itens[0].quantidade_executada == 1
+
+    resposta_delete = veiculacoes_router.deletar_veiculacao(veiculacao.id, db=db)
+    assert resposta_delete["success"] is True
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.itens[0].quantidade_executada == 0
+
+
 def test_monitor_busca_arquivo_por_nome_exato():
     class FakeResponse:
         status_code = 200

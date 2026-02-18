@@ -250,8 +250,10 @@ class APIClient:
                 json=veiculacao_data
             )
             
-            if response.status_code == 201:
-                return response.json()
+            if response.status_code in (200, 201):
+                payload = response.json()
+                payload["_created"] = response.status_code == 201
+                return payload
             else:
                 logger.warning(f"Erro ao criar veiculação: {response.status_code} - {response.text}")
                 return None
@@ -372,7 +374,8 @@ class LogMonitor:
         veiculacao = self.api_client.create_veiculacao(veiculacao_data)
         
         if veiculacao:
-            self.veiculacoes_criadas += 1
+            if veiculacao.get("_created", True):
+                self.veiculacoes_criadas += 1
             self._dedupe_cache.add(dedupe_key)
             logger.debug(f"Veiculação criada: {nome_arquivo} às {propaganda['data_hora']}")
         else:
