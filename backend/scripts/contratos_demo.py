@@ -1,5 +1,5 @@
 """
-test_contratos.py - Script de Teste para Contratos
+contratos_demo.py - Script de Demonstração para Contratos
 
 Este script demonstra como usar os endpoints de contratos.
 Certifique-se de que o servidor está rodando e que você já criou alguns clientes!
@@ -37,7 +37,7 @@ def test_criar_contratos():
     response = requests.get(f"{BASE_URL}/clientes/")
     
     if response.status_code != 200 or not response.json():
-        print("❌ Nenhum cliente encontrado! Execute test_api.py primeiro.")
+        print("❌ Nenhum cliente encontrado! Execute api_demo.py primeiro.")
         return []
     
     clientes = response.json()
@@ -273,7 +273,7 @@ def main():
         
         if not contratos:
             print("\n⚠️  Nenhum contrato foi criado. Verifique se há clientes cadastrados.")
-            print("   Execute 'python test_api.py' primeiro para criar clientes.")
+            print("   Execute 'python scripts/api_demo.py' primeiro para criar clientes.")
             return
         
         # 2. Listar contratos
@@ -315,8 +315,8 @@ def main():
     except requests.exceptions.ConnectionError:
         print("\n❌ ERRO: Não foi possível conectar à API!")
         print("Certifique-se de que o servidor está rodando:")
-        print("  cd backend/app")
-        print("  python main.py")
+        print("  cd backend")
+        print("  python -m app.main")
     except Exception as e:
         print(f"\n❌ ERRO: {e}")
         import traceback

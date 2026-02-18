@@ -29,10 +29,10 @@ function renderClientes(items) {
     .map(
       (c) => `
       <tr>
-        <td>${c.nome}</td>
-        <td>${c.cnpj_cpf || "-"}</td>
-        <td>${c.email || "-"}</td>
-        <td>${c.telefone || "-"}</td>
+        <td>${escapeHtml(c.nome)}</td>
+        <td>${escapeHtml(c.cnpj_cpf || "-")}</td>
+        <td>${escapeHtml(c.email || "-")}</td>
+        <td>${escapeHtml(c.telefone || "-")}</td>
         <td>${getStatusBadge(c.status, "cliente")}</td>
         <td>
           <button class="btn btn-sm btn-secondary" onclick="editarCliente(${c.id})">Editar</button>

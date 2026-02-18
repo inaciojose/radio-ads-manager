@@ -45,9 +45,9 @@ function renderRecentes(items) {
       (v) => `
       <tr>
         <td>${formatTime(v.data_hora)}</td>
-        <td>${v.cliente_nome || "-"}</td>
-        <td>${v.arquivo_nome || "-"}</td>
-        <td>${v.tipo_programa || "-"}</td>
+        <td>${escapeHtml(v.cliente_nome || "-")}</td>
+        <td>${escapeHtml(v.arquivo_nome || "-")}</td>
+        <td>${escapeHtml(v.tipo_programa || "-")}</td>
         <td>${getStatusBadge(String(v.processado), "processado")}</td>
       </tr>
     `,

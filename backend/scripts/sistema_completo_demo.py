@@ -1,5 +1,5 @@
 """
-test_sistema_completo.py - Teste Integrado Completo
+sistema_completo_demo.py - Teste Integrado Completo
 
 Este script testa o sistema completo:
 1. Cria clientes
@@ -42,7 +42,7 @@ def check_api():
             return False
     except:
         print("❌ API não está respondendo")
-        print("   Execute: cd backend/app && python main.py")
+        print("   Execute: cd backend && python -m app.main")
         return False
 
 

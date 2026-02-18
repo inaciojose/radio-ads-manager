@@ -1,5 +1,5 @@
 """
-test_api.py - Script de Teste da API
+api_demo.py - Script de Demonstração da API
 
 Este script demonstra como usar a API do Radio Ads Manager.
 Execute este arquivo para criar dados de teste e ver como tudo funciona.
@@ -261,8 +261,8 @@ def main():
     except requests.exceptions.ConnectionError:
         print("\n❌ ERRO: Não foi possível conectar à API!")
         print("Certifique-se de que o servidor está rodando:")
-        print("  cd backend/app")
-        print("  python main.py")
+        print("  cd backend")
+        print("  python -m app.main")
     except Exception as e:
         print(f"\n❌ ERRO: {e}")
         import traceback

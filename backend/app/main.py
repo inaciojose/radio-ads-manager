@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import os
 
 from app.database import init_db, get_database_info
 from app.routers import clientes, contratos, veiculacoes, arquivos
@@ -68,7 +69,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, especifique os domínios permitidos
+    allow_origins=os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5500,http://127.0.0.1:5500"
+    ).split(","),
     allow_credentials=True,
     allow_methods=["*"],  # Permite todos os métodos (GET, POST, PUT, DELETE, etc.)
     allow_headers=["*"],  # Permite todos os headers

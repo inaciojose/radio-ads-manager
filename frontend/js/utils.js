@@ -57,16 +57,31 @@ const showToast = (message, type = "info") => {
     info: "fa-info-circle",
   }[type]
 
-  toast.innerHTML = `
-        <i class="fas ${icon}"></i>
-        <span>${message}</span>
-    `
+  const iconElement = document.createElement("i")
+  iconElement.className = `fas ${icon}`
+
+  const messageElement = document.createElement("span")
+  messageElement.textContent = String(message || "")
+
+  toast.appendChild(iconElement)
+  toast.appendChild(messageElement)
 
   container.appendChild(toast)
 
   setTimeout(() => {
     toast.remove()
   }, 5000)
+}
+
+// Escape de texto para uso seguro em templates HTML
+const escapeHtml = (value) => {
+  if (value === null || value === undefined) return ""
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
 }
 
 // Modal

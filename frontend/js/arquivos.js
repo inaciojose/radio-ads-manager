@@ -31,8 +31,8 @@ function renderArquivos(items) {
     .map(
       (a) => `
       <tr>
-        <td>${a.nome_arquivo}</td>
-        <td>${a.titulo || "-"}</td>
+        <td>${escapeHtml(a.nome_arquivo)}</td>
+        <td>${escapeHtml(a.titulo || "-")}</td>
         <td>${a.cliente_id}</td>
         <td>${a.duracao_segundos ? `${a.duracao_segundos}s` : "-"}</td>
         <td>${getStatusBadge(String(a.ativo), "arquivo")}</td>

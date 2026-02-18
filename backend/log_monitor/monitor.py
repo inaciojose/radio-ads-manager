@@ -195,13 +195,16 @@ class APIClient:
         try:
             response = self.session.get(
                 f"{self.base_url}/arquivos",
-                params={"busca": nome_arquivo, "limit": 1}
+                params={"busca": nome_arquivo, "limit": 100}
             )
             
             if response.status_code == 200:
                 arquivos = response.json()
                 if arquivos:
-                    return arquivos[0]
+                    nome_normalizado = nome_arquivo.strip().lower()
+                    for arquivo in arquivos:
+                        if str(arquivo.get("nome_arquivo", "")).strip().lower() == nome_normalizado:
+                            return arquivo
             
             return None
         

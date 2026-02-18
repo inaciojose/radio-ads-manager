@@ -47,8 +47,8 @@ function renderContratos(items, clientesPorId) {
 
       return `
       <tr>
-        <td>${c.numero_contrato}</td>
-        <td>${clientesPorId[c.cliente_id] || c.cliente_id}</td>
+        <td>${escapeHtml(c.numero_contrato)}</td>
+        <td>${escapeHtml(clientesPorId[c.cliente_id] || c.cliente_id)}</td>
         <td>${formatDate(c.data_inicio)} a ${formatDate(c.data_fim)}</td>
         <td>${getProgressBar(totalExecutado, totalContratado)}</td>
         <td>${formatCurrency(c.valor_total)}</td>

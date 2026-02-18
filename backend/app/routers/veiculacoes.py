@@ -14,13 +14,13 @@ from datetime import datetime, date, timedelta
 
 from app.database import get_db
 from app import models, schemas
+from app.services.veiculacoes_service import processar_veiculacoes_periodo
 
 
 router = APIRouter(
     prefix="/veiculacoes",
     tags=["Veiculações"]
 )
-
 
 # ============================================
 # ENDPOINT: Listar veiculações
@@ -294,98 +294,12 @@ def processar_veiculacoes(
     Exemplo:
     POST /veiculacoes/processar?data_inicio=2024-01-01&data_fim=2024-01-31
     """
-    # Definir período (padrão: hoje)
-    if not data_inicio:
-        data_inicio = date.today()
-    if not data_fim:
-        data_fim = data_inicio
-    
-    inicio_periodo = datetime.combine(data_inicio, datetime.min.time())
-    fim_periodo = datetime.combine(data_fim, datetime.max.time())
-    
-    # Buscar veiculações a processar
-    query = db.query(models.Veiculacao).filter(
-        models.Veiculacao.data_hora.between(inicio_periodo, fim_periodo)
+    return processar_veiculacoes_periodo(
+        db=db,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        force=force,
     )
-    
-    if not force:
-        query = query.filter(models.Veiculacao.processado == False)
-    
-    veiculacoes = query.all()
-    
-    if not veiculacoes:
-        return {
-            "message": f"Nenhuma veiculação para processar no período {data_inicio} a {data_fim}",
-            "success": True
-        }
-    
-    # Processar cada veiculação
-    processadas = 0
-    erros = 0
-    
-    for veiculacao in veiculacoes:
-        try:
-            # Buscar arquivo e cliente
-            arquivo = veiculacao.arquivo_audio
-            if not arquivo:
-                erros += 1
-                continue
-            
-            cliente_id = arquivo.cliente_id
-            
-            # Buscar contrato ativo do cliente no período da veiculação
-            contrato = db.query(models.Contrato).filter(
-                models.Contrato.cliente_id == cliente_id,
-                models.Contrato.status_contrato == 'ativo',
-                models.Contrato.data_inicio <= veiculacao.data_hora.date(),
-                models.Contrato.data_fim >= veiculacao.data_hora.date()
-            ).first()
-            
-            if not contrato:
-                # Não tem contrato ativo, mas marca como processada mesmo assim
-                veiculacao.processado = True
-                veiculacao.contrato_id = None
-                processadas += 1
-                continue
-            
-            # Buscar item do contrato correspondente ao tipo de programa
-            item = None
-            if veiculacao.tipo_programa:
-                item = db.query(models.ContratoItem).filter(
-                    models.ContratoItem.contrato_id == contrato.id,
-                    models.ContratoItem.tipo_programa == veiculacao.tipo_programa
-                ).first()
-            
-            # Se não encontrou por tipo específico, pega o primeiro item
-            if not item and contrato.itens:
-                item = contrato.itens[0]
-            
-            if item:
-                # Incrementar quantidade executada
-                item.quantidade_executada += 1
-            
-            # Marcar como processada e associar ao contrato
-            veiculacao.processado = True
-            veiculacao.contrato_id = contrato.id
-            processadas += 1
-            
-        except Exception as e:
-            print(f"Erro ao processar veiculação {veiculacao.id}: {e}")
-            erros += 1
-    
-    # Commit de todas as mudanças
-    db.commit()
-    
-    return {
-        "message": f"Processamento concluído: {processadas} veiculações processadas, {erros} erros",
-        "success": True,
-        "detalhes": {
-            "periodo": f"{data_inicio} a {data_fim}",
-            "total_veiculacoes": len(veiculacoes),
-            "processadas": processadas,
-            "erros": erros
-        }
-    }
 
 
 # ============================================
