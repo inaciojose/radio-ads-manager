@@ -326,6 +326,136 @@ def test_atualizar_item_contrato_altera_quantidade(db):
     assert atualizado.tipo_programa == "esporte"
 
 
+def test_criar_contrato_sem_data_fim_com_meta_diaria(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Sem Prazo",
+            cnpj_cpf="88.888.888/0001-88",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=None,
+            valor_total=900,
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_diaria_meta=6,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    assert contrato.data_fim is None
+    assert contrato.itens[0].quantidade_contratada is None
+    assert contrato.itens[0].quantidade_diaria_meta == 6
+
+
+def test_processamento_contabiliza_contrato_sem_data_fim(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Vigencia Aberta",
+            cnpj_cpf="89.999.999/0001-89",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=None,
+            valor_total=750,
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="jornal",
+                    quantidade_contratada=30,
+                    quantidade_diaria_meta=2,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_sem_fim.mp3",
+        titulo="Spot sem fim",
+    )
+    db.add(arquivo)
+    db.flush()
+    db.add(models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime(2026, 2, 16, 9, 0, 0),
+        tipo_programa="jornal",
+        fonte="obs_manual",
+        processado=False,
+    ))
+    db.commit()
+
+    resp = veiculacoes_router.processar_veiculacoes(
+        data_inicio=date(2026, 2, 16),
+        data_fim=date(2026, 2, 16),
+        db=db,
+    )
+    assert resp["success"] is True
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.itens[0].quantidade_executada == 1
+
+
+def test_resumo_meta_diaria_hoje(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Meta Hoje",
+            cnpj_cpf="90.000.000/0001-90",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=None,
+            valor_total=400,
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=20,
+                    quantidade_diaria_meta=4,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_meta_hoje.mp3",
+        titulo="Spot meta hoje",
+    )
+    db.add(arquivo)
+    db.flush()
+    db.add(models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        contrato_id=contrato.id,
+        data_hora=datetime.combine(date.today(), datetime.min.time()).replace(hour=10),
+        tipo_programa="musical",
+        fonte="obs_manual",
+        processado=True,
+        contabilizada=True,
+    ))
+    db.commit()
+
+    resumo = contratos_router.resumo_meta_diaria_hoje(db=db)
+    assert resumo["meta_diaria_total"] == 4
+    assert resumo["executadas_hoje"] == 1
+    assert resumo["percentual_cumprimento"] == 25.0
+
+
 def test_listar_contratos_com_busca_por_cliente(db):
     cliente = clientes_router.criar_cliente(
         schemas.ClienteCreate(

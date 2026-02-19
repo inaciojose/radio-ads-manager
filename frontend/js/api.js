@@ -252,6 +252,10 @@ class API {
     return this.request("/contratos/resumo/estatisticas")
   }
 
+  async getResumoMetaDiariaHoje() {
+    return this.request("/contratos/resumo/meta-diaria-hoje")
+  }
+
   async getContratosCliente(clienteId) {
     return this.request(`/contratos/cliente/${clienteId}/resumo`)
   }

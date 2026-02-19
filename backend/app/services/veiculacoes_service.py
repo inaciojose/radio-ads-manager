@@ -189,7 +189,10 @@ def processar_veiculacoes_periodo(
                 models.Contrato.cliente_id == arquivo.cliente_id,
                 models.Contrato.status_contrato == "ativo",
                 models.Contrato.data_inicio <= veiculacao.data_hora.date(),
-                models.Contrato.data_fim >= veiculacao.data_hora.date()
+                or_(
+                    models.Contrato.data_fim.is_(None),
+                    models.Contrato.data_fim >= veiculacao.data_hora.date(),
+                ),
             )
 
             # Se a veiculação veio de uma frequência específica, prioriza contratos dessa frequência

@@ -2,7 +2,7 @@
 routers/contratos.py - Endpoints para gerenciar contratos.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -89,6 +89,7 @@ def estatisticas_contratos(db: Session = Depends(get_db)):
         db.query(models.Contrato)
         .filter(
             models.Contrato.status_contrato == "ativo",
+            models.Contrato.data_fim.isnot(None),
             models.Contrato.data_fim >= hoje,
             models.Contrato.data_fim <= daqui_30_dias,
         )
@@ -107,6 +108,82 @@ def estatisticas_contratos(db: Session = Depends(get_db)):
         "notas_fiscais_pendentes": notas_fiscais_pendentes,
         "vencendo_30_dias": vencendo_30_dias,
         "valor_total_ativos": float(valor_total_ativos),
+    }
+
+
+@router.get("/resumo/meta-diaria-hoje")
+def resumo_meta_diaria_hoje(db: Session = Depends(get_db)):
+    hoje = date.today()
+    inicio_dia = datetime.combine(hoje, datetime.min.time())
+    fim_dia = datetime.combine(hoje, datetime.max.time())
+
+    contratos_ativos = db.query(models.Contrato).filter(
+        models.Contrato.status_contrato == "ativo",
+        models.Contrato.data_inicio <= hoje,
+        or_(
+            models.Contrato.data_fim.is_(None),
+            models.Contrato.data_fim >= hoje,
+        ),
+    ).all()
+
+    if not contratos_ativos:
+        return {
+            "data": hoje,
+            "meta_diaria_total": 0,
+            "executadas_hoje": 0,
+            "percentual_cumprimento": 0.0,
+        }
+
+    contrato_ids = {c.id for c in contratos_ativos}
+    itens_por_contrato = {c.id: (c.itens or []) for c in contratos_ativos}
+    meta_diaria_total = sum(
+        (item.quantidade_diaria_meta or 0)
+        for c in contratos_ativos
+        for item in (c.itens or [])
+    )
+
+    metas_arquivo_ativas = db.query(
+        models.ContratoArquivoMeta.contrato_id,
+        models.ContratoArquivoMeta.arquivo_audio_id,
+    ).filter(
+        models.ContratoArquivoMeta.contrato_id.in_(contrato_ids),
+        models.ContratoArquivoMeta.ativo == True,  # noqa: E712
+    ).all()
+    pares_meta_arquivo = {(contrato_id, arquivo_id) for contrato_id, arquivo_id in metas_arquivo_ativas}
+
+    veiculacoes_hoje = db.query(models.Veiculacao).filter(
+        models.Veiculacao.data_hora.between(inicio_dia, fim_dia),
+        models.Veiculacao.contabilizada == True,  # noqa: E712
+        models.Veiculacao.contrato_id.in_(contrato_ids),
+    ).all()
+
+    executadas_hoje = 0
+    for veiculacao in veiculacoes_hoje:
+        if (veiculacao.contrato_id, veiculacao.arquivo_audio_id) in pares_meta_arquivo:
+            continue
+
+        item_contabilizado = None
+        itens_contrato = itens_por_contrato.get(veiculacao.contrato_id, [])
+        if veiculacao.tipo_programa:
+            item_contabilizado = next(
+                (i for i in itens_contrato if i.tipo_programa == veiculacao.tipo_programa),
+                None,
+            )
+            if not item_contabilizado and itens_contrato:
+                item_contabilizado = itens_contrato[0]
+
+        if item_contabilizado and (item_contabilizado.quantidade_diaria_meta or 0) > 0:
+            executadas_hoje += 1
+
+    percentual = 0.0
+    if meta_diaria_total > 0:
+        percentual = round((executadas_hoje / meta_diaria_total) * 100, 2)
+
+    return {
+        "data": hoje,
+        "meta_diaria_total": meta_diaria_total,
+        "executadas_hoje": executadas_hoje,
+        "percentual_cumprimento": percentual,
     }
 
 
@@ -217,6 +294,7 @@ def adicionar_item_contrato(
         contrato_id=contrato_id,
         tipo_programa=item.tipo_programa,
         quantidade_contratada=item.quantidade_contratada,
+        quantidade_diaria_meta=item.quantidade_diaria_meta,
         observacoes=item.observacoes,
     )
     db.add(db_item)
@@ -249,6 +327,12 @@ def atualizar_item_contrato(
     update_data = item_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_item, field, value)
+
+    if not db_item.quantidade_contratada and not db_item.quantidade_diaria_meta:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Item precisa ter quantidade_contratada, quantidade_diaria_meta ou ambas",
+        )
 
     db.commit()
     db.refresh(db_item)

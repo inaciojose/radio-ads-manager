@@ -28,6 +28,7 @@ def criar_contrato_com_itens(db: Session, contrato: schemas.ContratoCreate):
             contrato_id=db_contrato.id,
             tipo_programa=item.tipo_programa,
             quantidade_contratada=item.quantidade_contratada,
+            quantidade_diaria_meta=item.quantidade_diaria_meta,
             observacoes=item.observacoes,
         )
         db.add(db_item)

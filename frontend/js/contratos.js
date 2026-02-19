@@ -91,7 +91,7 @@ function renderContratos(items, clientesPorId) {
       <tr>
         <td>${escapeHtml(c.numero_contrato || "-")}</td>
         <td>${escapeHtml(clientesPorId[c.cliente_id] || String(c.cliente_id))}</td>
-        <td>${formatDate(c.data_inicio)} a ${formatDate(c.data_fim)}</td>
+        <td>${formatDate(c.data_inicio)} a ${c.data_fim ? formatDate(c.data_fim) : "Sem prazo"}</td>
         <td>${getProgressBar(totalExecutado, totalContratado)}</td>
         <td>${formatCurrency(c.valor_total)}</td>
         <td>${getStatusBadge(c.status_nf, "nf")}</td>
@@ -160,7 +160,11 @@ function renderContratoItensEdit(itens) {
           </div>
           <div class="form-group">
             <label>Qtd Contratada</label>
-            <input type="number" min="1" class="contrato-item-quantidade" value="${item.quantidade_contratada || 1}" />
+            <input type="number" min="1" class="contrato-item-quantidade" value="${item.quantidade_contratada || ""}" />
+          </div>
+          <div class="form-group">
+            <label>Meta Diária</label>
+            <input type="number" min="1" class="contrato-item-meta-diaria" value="${item.quantidade_diaria_meta || ""}" />
           </div>
         </div>
         <div class="form-group">
@@ -453,6 +457,7 @@ async function showContratoModal(contratoId = null) {
 
   document.getElementById("contrato-item-tipo").value = ""
   document.getElementById("contrato-item-quantidade").value = ""
+  document.getElementById("contrato-item-meta-diaria").value = ""
   document.getElementById("contrato-item-observacoes").value = ""
 
   openModal("modal-contrato")
@@ -471,18 +476,18 @@ async function saveContrato() {
     showToast("Selecione o cliente", "warning")
     return
   }
-  if (!dataInicio || !dataFim) {
-    showToast("Informe data de início e fim", "warning")
+  if (!dataInicio) {
+    showToast("Informe data de início", "warning")
     return
   }
-  if (new Date(dataFim) < new Date(dataInicio)) {
+  if (dataFim && new Date(dataFim) < new Date(dataInicio)) {
     showToast("Data fim não pode ser menor que data início", "warning")
     return
   }
 
   const basePayload = {
     data_inicio: dataInicio,
-    data_fim: dataFim,
+    data_fim: dataFim || null,
     frequencia: document.getElementById("contrato-frequencia").value,
     valor_total:
       document.getElementById("contrato-valor-total").value === ""
@@ -505,15 +510,25 @@ async function saveContrato() {
       for (const row of itemRows) {
         const itemId = row.dataset.itemId
         const tipoPrograma = row.querySelector(".contrato-item-tipo")?.value.trim()
-        const quantidade = Number(row.querySelector(".contrato-item-quantidade")?.value)
+        const quantidadeRaw = row.querySelector(".contrato-item-quantidade")?.value
+        const metaDiariaRaw = row.querySelector(".contrato-item-meta-diaria")?.value
+        const quantidade = quantidadeRaw ? Number(quantidadeRaw) : null
+        const metaDiaria = metaDiariaRaw ? Number(metaDiariaRaw) : null
 
-        if (!tipoPrograma || !quantidade || quantidade < 1) {
-          throw new Error("Todos os itens devem ter tipo e quantidade maior que 0")
+        if (!tipoPrograma) {
+          throw new Error("Todos os itens devem ter tipo de programa")
+        }
+        if ((quantidade !== null && quantidade < 1) || (metaDiaria !== null && metaDiaria < 1)) {
+          throw new Error("Metas de item devem ser maiores que 0")
+        }
+        if (quantidade === null && metaDiaria === null) {
+          throw new Error("Cada item precisa de meta total, diária ou ambas")
         }
 
         await api.updateContratoItem(id, itemId, {
           tipo_programa: tipoPrograma,
           quantidade_contratada: quantidade,
+          quantidade_diaria_meta: metaDiaria,
           observacoes:
             row.querySelector(".contrato-item-observacoes")?.value.trim() || null,
         })
@@ -570,9 +585,20 @@ async function saveContrato() {
       showToast("Contrato atualizado", "success")
     } else {
       const itemTipo = document.getElementById("contrato-item-tipo").value.trim()
-      const itemQuantidade = Number(document.getElementById("contrato-item-quantidade").value)
-      if (!itemTipo || !itemQuantidade || itemQuantidade < 1) {
-        showToast("Informe item e quantidade do contrato", "warning")
+      const itemQuantidadeRaw = document.getElementById("contrato-item-quantidade").value
+      const itemMetaDiariaRaw = document.getElementById("contrato-item-meta-diaria").value
+      const itemQuantidade = itemQuantidadeRaw ? Number(itemQuantidadeRaw) : null
+      const itemMetaDiaria = itemMetaDiariaRaw ? Number(itemMetaDiariaRaw) : null
+      if (!itemTipo) {
+        showToast("Informe o tipo de programa do item", "warning")
+        return
+      }
+      if ((itemQuantidade !== null && itemQuantidade < 1) || (itemMetaDiaria !== null && itemMetaDiaria < 1)) {
+        showToast("Metas do item devem ser maiores que 0", "warning")
+        return
+      }
+      if (itemQuantidade === null && itemMetaDiaria === null) {
+        showToast("Informe meta total, diária ou ambas no item", "warning")
         return
       }
 
@@ -583,6 +609,7 @@ async function saveContrato() {
           {
             tipo_programa: itemTipo,
             quantidade_contratada: itemQuantidade,
+            quantidade_diaria_meta: itemMetaDiaria,
             observacoes:
             document.getElementById("contrato-item-observacoes").value.trim() || null,
           },

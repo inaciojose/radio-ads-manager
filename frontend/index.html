@@ -143,6 +143,17 @@
                 <p>NFs Pendentes</p>
               </div>
             </div>
+
+            <div class="stat-card" id="stat-meta-diaria-card">
+              <div class="stat-icon info">
+                <i class="fas fa-bullseye"></i>
+              </div>
+              <div class="stat-content">
+                <h3 id="stat-meta-diaria">-</h3>
+                <p>Meta Diária (Hoje)</p>
+                <small id="stat-meta-diaria-detail">-</small>
+              </div>
+            </div>
           </div>
 
           <!-- Charts -->
@@ -521,8 +532,8 @@
                 <input type="date" id="contrato-data-inicio" required />
               </div>
               <div class="form-group">
-                <label>Data Fim *</label>
-                <input type="date" id="contrato-data-fim" required />
+                <label>Data Fim</label>
+                <input type="date" id="contrato-data-fim" />
               </div>
             </div>
 
@@ -579,8 +590,12 @@
                   <input type="text" id="contrato-item-tipo" placeholder="musical, esporte..." />
                 </div>
                 <div class="form-group">
-                  <label>Quantidade Contratada *</label>
+                  <label>Meta Total</label>
                   <input type="number" min="1" id="contrato-item-quantidade" />
+                </div>
+                <div class="form-group">
+                  <label>Meta Diária</label>
+                  <input type="number" min="1" id="contrato-item-meta-diaria" />
                 </div>
               </div>
               <div class="form-group">

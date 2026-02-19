@@ -307,6 +307,15 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.stat-card.alert-low {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.stat-card.alert-ok {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
 .stat-icon {
   width: 60px;
   height: 60px;
@@ -330,6 +339,9 @@ body {
 .stat-icon.red {
   background: var(--danger);
 }
+.stat-icon.info {
+  background: var(--info);
+}
 
 .stat-content h3 {
   font-size: 1.875rem;
@@ -342,6 +354,12 @@ body {
   margin: 0;
   color: var(--gray);
   font-size: 0.875rem;
+}
+
+.stat-content small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--gray);
 }
 
 /* Charts Grid */

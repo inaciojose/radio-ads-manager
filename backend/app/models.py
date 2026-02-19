@@ -88,7 +88,7 @@ class Contrato(Base):
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     numero_contrato = Column(String(50), unique=True, index=True)
     data_inicio = Column(Date, nullable=False)
-    data_fim = Column(Date, nullable=False)
+    data_fim = Column(Date, nullable=True)
     frequencia = Column(String(10), default="ambas")  # '102.7', '104.7' ou 'ambas'
     valor_total = Column(Float)
     status_contrato = Column(String(20), default="ativo")  # 'ativo', 'concluído', 'cancelado'
@@ -126,7 +126,8 @@ class ContratoItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
     tipo_programa = Column(String(50), nullable=False)  # 'musical', 'esporte', 'jornal', etc.
-    quantidade_contratada = Column(Integer, nullable=False)
+    quantidade_contratada = Column(Integer, nullable=True)
+    quantidade_diaria_meta = Column(Integer, nullable=True)
     quantidade_executada = Column(Integer, default=0)
     observacoes = Column(Text)
     
@@ -139,13 +140,15 @@ class ContratoItem(Base):
     @property
     def percentual_execucao(self):
         """Calcula o percentual de execução deste item"""
-        if self.quantidade_contratada == 0:
+        if not self.quantidade_contratada:
             return 0
         return round((self.quantidade_executada / self.quantidade_contratada) * 100, 2)
     
     @property
     def quantidade_restante(self):
         """Calcula quantas chamadas ainda faltam"""
+        if self.quantidade_contratada is None:
+            return None
         return max(0, self.quantidade_contratada - self.quantidade_executada)
 
 

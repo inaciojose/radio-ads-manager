@@ -9,7 +9,7 @@ Diferença entre Model (models.py) e Schema:
 - Schema: Representa dados na API (entrada/saída) (Pydantic)
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -71,8 +71,15 @@ class ClienteResponse(ClienteBase):
 class ContratoItemBase(BaseModel):
     """Schema base para item de contrato"""
     tipo_programa: str = Field(..., description="Tipo: musical, esporte, jornal, etc.")
-    quantidade_contratada: int = Field(..., gt=0, description="Quantidade de chamadas contratadas")
+    quantidade_contratada: Optional[int] = Field(None, gt=0, description="Quantidade total de chamadas contratadas")
+    quantidade_diaria_meta: Optional[int] = Field(None, gt=0, description="Meta diária de chamadas")
     observacoes: Optional[str] = None
+
+    @root_validator(skip_on_failure=True)
+    def validar_meta_total_ou_diaria(cls, values):
+        if not values.get("quantidade_contratada") and not values.get("quantidade_diaria_meta"):
+            raise ValueError("Informe quantidade_contratada, quantidade_diaria_meta ou ambas")
+        return values
 
 
 class ContratoItemCreate(ContratoItemBase):
@@ -84,6 +91,7 @@ class ContratoItemUpdate(BaseModel):
     """Schema para atualizar item de contrato"""
     tipo_programa: Optional[str] = None
     quantidade_contratada: Optional[int] = Field(None, gt=0)
+    quantidade_diaria_meta: Optional[int] = Field(None, gt=0)
     observacoes: Optional[str] = None
 
 
@@ -93,7 +101,7 @@ class ContratoItemResponse(ContratoItemBase):
     contrato_id: int
     quantidade_executada: int
     percentual_execucao: float
-    quantidade_restante: int
+    quantidade_restante: Optional[int]
     
     class Config:
         from_attributes = True
@@ -157,7 +165,7 @@ class ContratoBase(BaseModel):
     """Schema base para contrato"""
     cliente_id: int
     data_inicio: date
-    data_fim: date
+    data_fim: Optional[date] = None
     frequencia: str = Field(default="ambas", description="Frequência: 102.7, 104.7 ou ambas")
     valor_total: Optional[float] = Field(None, ge=0, description="Valor total do contrato")
     status_contrato: str = Field(default="ativo")
@@ -186,7 +194,9 @@ class ContratoBase(BaseModel):
     
     @validator('data_fim')
     def validar_datas(cls, v, values):
-        """Valida que data_fim é maior que data_inicio"""
+        """Valida que data_fim é maior que data_inicio quando informada"""
+        if v is None:
+            return v
         if 'data_inicio' in values and v < values['data_inicio']:
             raise ValueError('Data fim deve ser maior que data início')
         return v
@@ -239,7 +249,7 @@ class ContratoResumo(BaseModel):
     cliente_id: int
     cliente_nome: str
     data_inicio: date
-    data_fim: date
+    data_fim: Optional[date] = None
     valor_total: Optional[float]
     status_contrato: str
     status_nf: str
