@@ -34,6 +34,22 @@ class Usuario(Base):
         return f"<Usuario(id={self.id}, username='{self.username}', role='{self.role}')>"
 
 
+class ApiKey(Base):
+    """
+    Chave de serviço para integrações máquina-a-máquina (ex: monitor de logs).
+    """
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    descricao = Column(String(255), nullable=True)
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<ApiKey(id={self.id}, ativo={self.ativo})>"
+
+
 # ============================================
 # MODELO: Cliente
 # ============================================

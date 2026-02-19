@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_monitor_or_roles, require_roles
 from app import models, schemas
 from app.database import get_db
 
@@ -28,6 +28,7 @@ def listar_arquivos(
     ativo: Optional[bool] = Query(None),
     busca: Optional[str] = Query(None, description="Busca por nome_arquivo ou titulo"),
     db: Session = Depends(get_db),
+    _auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     query = db.query(models.ArquivoAudio)
 

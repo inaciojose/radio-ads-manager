@@ -21,9 +21,14 @@ import requests
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import logging
+
+# Carrega backend/.env antes de qualquer leitura com os.getenv.
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(ENV_PATH)
 
 # Configurar logging
 logging.basicConfig(
@@ -42,6 +47,8 @@ class Config:
     
     # URL da API
     API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+    MONITOR_API_KEY = os.getenv("MONITOR_API_KEY")
+    # Compatibilidade legada: token Bearer manual.
     API_TOKEN = os.getenv("API_TOKEN")
     
     # Mapa frequência->diretório de logs (separado por ';')
@@ -219,6 +226,7 @@ class APIClient:
     def __init__(
         self,
         base_url: str,
+        api_key: Optional[str] = None,
         token: Optional[str] = None,
         timeout: float = 8.0,
         retries: int = 3,
@@ -227,8 +235,18 @@ class APIClient:
         self.timeout = timeout
         self.retries = max(1, retries)
         self.session = requests.Session()
-        if token:
+        if api_key:
+            self.session.headers.update({"X-API-Key": api_key})
+        elif token:
             self.session.headers.update({"Authorization": f"Bearer {token}"})
+
+    def _log_auth_failure(self, endpoint: str, response: requests.Response):
+        logger.error(
+            "Falha de autenticação ao acessar %s: HTTP %s. "
+            "Verifique MONITOR_API_KEY (preferencial) ou API_TOKEN.",
+            endpoint,
+            response.status_code,
+        )
 
     def _request_with_retry(self, method: str, url: str, **kwargs):
         last_exc: Optional[Exception] = None
@@ -272,6 +290,8 @@ class APIClient:
                     for arquivo in arquivos:
                         if str(arquivo.get("nome_arquivo", "")).strip().lower() == nome_normalizado:
                             return arquivo
+            elif response.status_code == 401:
+                self._log_auth_failure("/arquivos", response)
             
             return None
         
@@ -300,6 +320,9 @@ class APIClient:
                 payload = response.json()
                 payload["_created"] = response.status_code == 201
                 return payload
+            if response.status_code == 401:
+                self._log_auth_failure("/veiculacoes/", response)
+                return None
             else:
                 logger.warning(f"Erro ao criar veiculação: {response.status_code} - {response.text}")
                 return None
@@ -328,6 +351,9 @@ class APIClient:
                     "existentes": int(detalhes.get("existentes", 0)),
                     "falhas": int(detalhes.get("falhas", 0)),
                 }
+            if response.status_code == 401:
+                self._log_auth_failure("/veiculacoes/ingest/lote", response)
+                return {"criadas": 0, "existentes": 0, "falhas": len(payload)}
             if response.status_code == 404:
                 return self._create_veiculacoes_fallback(payload)
             logger.warning(
@@ -379,6 +405,9 @@ class APIClient:
             if response.status_code == 200:
                 logger.info(f"Veiculações processadas: {response.json()}")
                 return True
+            if response.status_code == 401:
+                self._log_auth_failure("/veiculacoes/processar", response)
+                return False
             else:
                 logger.warning(f"Erro ao processar veiculações: {response.status_code}")
                 return False
@@ -395,6 +424,9 @@ class APIClient:
                 f"{self.base_url}/health",
                 timeout=5,
             )
+            if response.status_code == 401:
+                self._log_auth_failure("/health", response)
+                return False
             return response.status_code == 200
         except:
             return False
@@ -414,7 +446,8 @@ class LogMonitor:
         self.parser = ZaraLogParser(config)
         self.api_client = APIClient(
             config.API_BASE_URL,
-            config.API_TOKEN,
+            api_key=config.MONITOR_API_KEY,
+            token=config.API_TOKEN,
             timeout=config.REQUEST_TIMEOUT,
             retries=config.REQUEST_RETRIES,
         )

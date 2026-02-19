@@ -8,7 +8,7 @@ from fastapi import HTTPException
 os.environ["DATABASE_URL"] = "sqlite:///./test_radio_ads.db"
 
 from app import models, schemas
-from app.auth import hash_password
+from app.auth import create_api_key, hash_password, require_monitor_or_roles
 from app.database import Base, SessionLocal, engine, init_db
 from app.main import health_check
 from app.routers import auth as auth_router
@@ -81,6 +81,29 @@ def test_login_retorna_usuario_com_campos_completos(db):
     assert resposta["token_type"] == "bearer"
     assert isinstance(resposta["usuario"], models.Usuario)
     assert resposta["usuario"].created_at is not None
+
+
+def test_criar_api_key_retorna_valor_em_texto_puro(db):
+    resposta = auth_router.criar_api_key(
+        schemas.ApiKeyCreateRequest(descricao="Monitor producao"),
+        db=db,
+    )
+
+    assert resposta["id"] > 0
+    assert resposta["ativo"] is True
+    assert resposta["descricao"] == "Monitor producao"
+    assert resposta["api_key"].startswith("ramk_")
+    assert db.query(models.ApiKey).count() == 1
+
+
+def test_require_monitor_or_roles_aceita_api_key(db):
+    db_key, raw_key = create_api_key(db=db, descricao="Monitor local")
+    dependency = require_monitor_or_roles("admin", "operador")
+
+    autenticado = dependency(x_api_key=raw_key, credentials=None, db=db)
+
+    assert isinstance(autenticado, models.ApiKey)
+    assert autenticado.id == db_key.id
 
 
 def test_reprocessamento_force_nao_duplica_contagem(db):

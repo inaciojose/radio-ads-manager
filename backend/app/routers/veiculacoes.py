@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 
-from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
+from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_monitor_or_roles, require_roles
 from app.database import get_db
 from app import models, schemas
 from app.services.veiculacoes_service import (
@@ -181,7 +181,7 @@ def criar_veiculacao(
     veiculacao: schemas.VeiculacaoCreate,
     response: Response = None,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    _auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Cria uma veiculação manualmente.
@@ -208,7 +208,7 @@ def criar_veiculacao(
 def ingestao_veiculacoes_lote(
     payload: List[schemas.VeiculacaoCreate],
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    _auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Ingestão em lote para monitor de logs.
@@ -455,7 +455,7 @@ def processar_veiculacoes(
     data_fim: Optional[date] = Query(None, description="Data fim (padrão: hoje)"),
     force: bool = Query(False, description="Reprocessar mesmo se já processado"),
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    _auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Processa veiculações não processadas, contabilizando-as nos contratos.

@@ -21,8 +21,9 @@ echo "[1/5] Build e subida dos containers..."
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 echo "[2/5] Aguardando API ficar saudável..."
+monitor_api_key="$(grep -E '^MONITOR_API_KEY=' .env.prod | head -n1 | cut -d'=' -f2-)"
 for i in {1..30}; do
-  if curl -fsS "http://127.0.0.1:8000/health" >/dev/null; then
+  if curl -fsS -H "X-API-Key: ${monitor_api_key}" "http://127.0.0.1:8000/health" >/dev/null; then
     echo "API saudável."
     break
   fi

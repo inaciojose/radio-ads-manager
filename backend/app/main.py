@@ -5,7 +5,7 @@ Este é o ponto de entrada da aplicação.
 Aqui configuramos o FastAPI e registramos todas as rotas.
 """
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -13,7 +13,13 @@ import os
 import uuid
 
 from app.database import init_db, get_database_info
-from app.auth import ensure_initial_admin, validate_auth_settings
+from app.auth import (
+    ROLE_ADMIN,
+    ROLE_OPERADOR,
+    ensure_initial_admin,
+    require_monitor_or_roles,
+    validate_auth_settings,
+)
 from app.routers import arquivos, auth, clientes, contratos, usuarios, veiculacoes
 
 
@@ -154,7 +160,7 @@ def root():
 
 
 @app.get("/health")
-def health_check():
+def health_check(_auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR))):
     """
     Endpoint de health check - Verifica se a aplicação está funcionando
     """

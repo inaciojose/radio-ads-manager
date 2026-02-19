@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -85,6 +85,23 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(dk, expected)
 
 
+def hash_api_key(api_key: str) -> str:
+    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
+def create_api_key(db: Session, descricao: Optional[str] = None) -> tuple[models.ApiKey, str]:
+    raw_key = f"ramk_{secrets.token_urlsafe(32)}"
+    db_key = models.ApiKey(
+        key_hash=hash_api_key(raw_key),
+        descricao=(descricao or "").strip() or None,
+        ativo=True,
+    )
+    db.add(db_key)
+    db.commit()
+    db.refresh(db_key)
+    return db_key, raw_key
+
+
 def create_access_token(usuario: models.Usuario) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -127,9 +144,9 @@ def decode_access_token(token: str) -> dict:
     return payload
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
+def _get_user_from_credentials(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    db: Session,
 ) -> models.Usuario:
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticação obrigatória")
@@ -147,8 +164,43 @@ def get_current_user(
     return user
 
 
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> models.Usuario:
+    return _get_user_from_credentials(credentials, db)
+
+
 def require_roles(*roles: str) -> Callable:
     def dependency(user: models.Usuario = Depends(get_current_user)) -> models.Usuario:
+        if user.role not in roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+        return user
+
+    return dependency
+
+
+def require_monitor_or_roles(*roles: str) -> Callable:
+    """
+    Autoriza requisição via X-API-Key ativa ou Bearer com role permitida.
+    """
+    def dependency(
+        x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        db: Session = Depends(get_db),
+    ):
+        api_key = (x_api_key or "").strip()
+        if api_key:
+            api_key_hash = hash_api_key(api_key)
+            db_key = (
+                db.query(models.ApiKey)
+                .filter(models.ApiKey.key_hash == api_key_hash, models.ApiKey.ativo == True)  # noqa: E712
+                .first()
+            )
+            if db_key:
+                return db_key
+
+        user = _get_user_from_credentials(credentials, db)
         if user.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
         return user

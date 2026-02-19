@@ -601,6 +601,22 @@ class TokenResponse(BaseModel):
     usuario: UsuarioResponse
 
 
+class ApiKeyCreateRequest(BaseModel):
+    descricao: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description="Descrição da finalidade da chave (ex: monitor produção).",
+    )
+
+
+class ApiKeyCreateResponse(BaseModel):
+    id: int
+    descricao: Optional[str] = None
+    ativo: bool
+    created_at: datetime
+    api_key: str
+
+
 # ============================================
 # SCHEMAS: Respostas Padrão
 # ============================================
