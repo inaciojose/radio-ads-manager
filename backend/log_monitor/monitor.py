@@ -58,6 +58,18 @@ class Config:
     
     # Intervalo para processar veiculações (em segundos)
     PROCESS_INTERVAL = 300  # 5 minutos
+
+    # Timeout HTTP por requisição (segundos)
+    REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "8"))
+
+    # Tentativas para requisições HTTP
+    REQUEST_RETRIES = int(os.getenv("REQUEST_RETRIES", "3"))
+
+    # Quantidade máxima por lote na ingestão
+    INGEST_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "100"))
+
+    # Debounce para eventos de alteração de arquivo (watch mode)
+    WATCH_DEBOUNCE_SECONDS = float(os.getenv("WATCH_DEBOUNCE_SECONDS", "1.5"))
     
     # Prefixo canônico para identificar propagandas nos logs da rádio.
     # Aceita subpastas dentro desse caminho.
@@ -204,11 +216,40 @@ class APIClient:
     Cliente para comunicação com a API do Radio Ads Manager.
     """
     
-    def __init__(self, base_url: str, token: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: str,
+        token: Optional[str] = None,
+        timeout: float = 8.0,
+        retries: int = 3,
+    ):
         self.base_url = base_url
+        self.timeout = timeout
+        self.retries = max(1, retries)
         self.session = requests.Session()
         if token:
             self.session.headers.update({"Authorization": f"Bearer {token}"})
+
+    def _request_with_retry(self, method: str, url: str, **kwargs):
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, self.retries + 1):
+            try:
+                response = self.session.request(
+                    method,
+                    url,
+                    timeout=kwargs.pop("timeout", self.timeout),
+                    **kwargs,
+                )
+                if response.status_code >= 500 and attempt < self.retries:
+                    time.sleep(0.2 * attempt)
+                    continue
+                return response
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt < self.retries:
+                    time.sleep(0.2 * attempt)
+                    continue
+        raise last_exc if last_exc else RuntimeError("Falha HTTP sem exceção registrada")
     
     def get_arquivo_by_nome(self, nome_arquivo: str) -> Optional[Dict]:
         """
@@ -220,7 +261,8 @@ class APIClient:
         try:
             response = self.session.get(
                 f"{self.base_url}/arquivos",
-                params={"busca": nome_arquivo, "limit": 100}
+                params={"busca": nome_arquivo, "limit": 100},
+                timeout=self.timeout,
             )
             
             if response.status_code == 200:
@@ -250,7 +292,8 @@ class APIClient:
         try:
             response = self.session.post(
                 f"{self.base_url}/veiculacoes/",
-                json=veiculacao_data
+                json=veiculacao_data,
+                timeout=self.timeout,
             )
             
             if response.status_code in (200, 201):
@@ -264,6 +307,53 @@ class APIClient:
         except Exception as e:
             logger.error(f"Erro ao criar veiculação: {e}")
             return None
+
+    def create_veiculacoes_batch(self, payload: List[Dict]) -> Dict:
+        """
+        Cria várias veiculações em lote.
+        Faz fallback para chamadas unitárias caso endpoint não exista.
+        """
+        if not payload:
+            return {"criadas": 0, "existentes": 0, "falhas": 0}
+        try:
+            response = self._request_with_retry(
+                "POST",
+                f"{self.base_url}/veiculacoes/ingest/lote",
+                json=payload,
+            )
+            if response.status_code == 200:
+                detalhes = response.json().get("detalhes", {})
+                return {
+                    "criadas": int(detalhes.get("criadas", 0)),
+                    "existentes": int(detalhes.get("existentes", 0)),
+                    "falhas": int(detalhes.get("falhas", 0)),
+                }
+            if response.status_code == 404:
+                return self._create_veiculacoes_fallback(payload)
+            logger.warning(
+                "Erro na ingestão em lote: %s - %s",
+                response.status_code,
+                response.text,
+            )
+            return self._create_veiculacoes_fallback(payload)
+        except Exception as e:
+            logger.warning(f"Falha no lote, usando fallback unitário: {e}")
+            return self._create_veiculacoes_fallback(payload)
+
+    def _create_veiculacoes_fallback(self, payload: List[Dict]) -> Dict:
+        criadas = 0
+        existentes = 0
+        falhas = 0
+        for item in payload:
+            resp = self.create_veiculacao(item)
+            if not resp:
+                falhas += 1
+                continue
+            if resp.get("_created", True):
+                criadas += 1
+            else:
+                existentes += 1
+        return {"criadas": criadas, "existentes": existentes, "falhas": falhas}
     
     def process_veiculacoes(self, data_inicio: str, data_fim: str) -> bool:
         """
@@ -282,7 +372,8 @@ class APIClient:
                 params={
                     "data_inicio": data_inicio,
                     "data_fim": data_fim
-                }
+                },
+                timeout=self.timeout,
             )
             
             if response.status_code == 200:
@@ -299,7 +390,11 @@ class APIClient:
     def check_health(self) -> bool:
         """Verifica se a API está online"""
         try:
-            response = self.session.get(f"{self.base_url}/health", timeout=5)
+            response = self._request_with_retry(
+                "GET",
+                f"{self.base_url}/health",
+                timeout=5,
+            )
             return response.status_code == 200
         except:
             return False
@@ -317,14 +412,22 @@ class LogMonitor:
     def __init__(self, config: Config):
         self.config = config
         self.parser = ZaraLogParser(config)
-        self.api_client = APIClient(config.API_BASE_URL, config.API_TOKEN)
+        self.api_client = APIClient(
+            config.API_BASE_URL,
+            config.API_TOKEN,
+            timeout=config.REQUEST_TIMEOUT,
+            retries=config.REQUEST_RETRIES,
+        )
         self.log_sources = config.parse_log_sources()
         self.veiculacoes_criadas = 0
         self.erros = 0
         self.last_process_time = None
         self._dedupe_cache = set()
+        self._arquivo_id_cache: Dict[str, Optional[int]] = {}
+        self._file_offsets: Dict[Tuple[str, str], int] = {}
+        self._pending_events: Dict[Tuple[str, str], Dict] = {}
     
-    def process_log_file(self, filepath: str, date: datetime, frequencia: str):
+    def process_log_file(self, filepath: str, date: datetime, frequencia: str, incremental: bool = False):
         """
         Processa um arquivo de log completo.
         
@@ -332,57 +435,89 @@ class LogMonitor:
             filepath: Caminho do arquivo
             date: Data do arquivo
         """
-        logger.info(f"Processando arquivo: {filepath}")
-        
-        # Parse do arquivo
-        propagandas = self.parser.parse_file(filepath, date, frequencia)
-        logger.info(f"Encontradas {len(propagandas)} propagandas no arquivo")
-        
-        # Criar veiculações
-        for propaganda in propagandas:
-            self.create_veiculacao_from_log(propaganda)
-        
-        logger.info(f"Processamento concluído. Criadas: {self.veiculacoes_criadas}, Erros: {self.erros}")
-    
-    def create_veiculacao_from_log(self, propaganda: Dict):
-        """
-        Cria uma veiculação a partir dos dados do log.
-        
-        Args:
-            propaganda: Dados extraídos do log
-        """
-        nome_arquivo = propaganda['nome_arquivo']
-        
-        # Buscar arquivo cadastrado na API
-        arquivo = self.api_client.get_arquivo_by_nome(nome_arquivo)
-        
-        if not arquivo:
-            logger.debug(f"Arquivo '{nome_arquivo}' não encontrado no cadastro - ignorando")
-            return
-        
-        # Preparar dados da veiculação
-        dedupe_key = (arquivo["id"], propaganda["data_hora"].isoformat(), propaganda.get("frequencia"))
-        if dedupe_key in self._dedupe_cache:
+        logger.info(f"Processando arquivo: {filepath} (incremental={incremental})")
+        key = (frequencia, filepath)
+        propagandas: List[Dict] = []
+        lidas = 0
+
+        try:
+            with open(filepath, "r", encoding="cp1252", errors="ignore") as f:
+                start_offset = self._file_offsets.get(key, 0) if incremental else 0
+                if incremental:
+                    tamanho_atual = os.path.getsize(filepath)
+                    if start_offset > tamanho_atual:
+                        start_offset = 0  # arquivo truncado/rotacionado
+                    f.seek(start_offset)
+
+                for line in f:
+                    lidas += 1
+                    propaganda = self.parser.parse_line(line, date, frequencia)
+                    if propaganda:
+                        propagandas.append(propaganda)
+
+                self._file_offsets[key] = f.tell()
+        except Exception as e:
+            logger.error(f"Erro ao ler arquivo {filepath}: {e}")
+            self.erros += 1
             return
 
-        veiculacao_data = {
-            "arquivo_audio_id": arquivo["id"],
-            "data_hora": propaganda["data_hora"].isoformat(),
-            "frequencia": propaganda.get("frequencia"),
-            "tipo_programa": propaganda["tipo_programa"],
-            "fonte": "zara_log",
-        }
-        
-        # Criar veiculação
-        veiculacao = self.api_client.create_veiculacao(veiculacao_data)
-        
-        if veiculacao:
-            if veiculacao.get("_created", True):
-                self.veiculacoes_criadas += 1
+        logger.info(f"Linhas lidas: {lidas}. Propagandas detectadas: {len(propagandas)}")
+        if not propagandas:
+            return
+
+        self.create_veiculacoes_from_logs(propagandas)
+        logger.info(
+            "Processamento concluído. Criadas: %s, Erros: %s",
+            self.veiculacoes_criadas,
+            self.erros,
+        )
+
+    def create_veiculacoes_from_logs(self, propagandas: List[Dict]):
+        """
+        Cria veiculações em lote a partir dos dados do log.
+        """
+        payload: List[Dict] = []
+        for propaganda in propagandas:
+            nome_arquivo = propaganda["nome_arquivo"]
+            nome_key = nome_arquivo.strip().lower()
+            if nome_key in self._arquivo_id_cache:
+                arquivo_id = self._arquivo_id_cache[nome_key]
+                if arquivo_id is None:
+                    continue
+            else:
+                arquivo = self.api_client.get_arquivo_by_nome(nome_arquivo)
+                if not arquivo:
+                    # cacheia miss para evitar consultas repetidas no mesmo ciclo
+                    self._arquivo_id_cache[nome_key] = None
+                    logger.debug(f"Arquivo '{nome_arquivo}' não encontrado no cadastro - ignorando")
+                    continue
+                arquivo_id = arquivo["id"]
+                self._arquivo_id_cache[nome_key] = arquivo_id
+
+            dedupe_key = (arquivo_id, propaganda["data_hora"].isoformat(), propaganda.get("frequencia"))
+            if dedupe_key in self._dedupe_cache:
+                continue
+
+            payload.append(
+                {
+                    "arquivo_audio_id": arquivo_id,
+                    "data_hora": propaganda["data_hora"].isoformat(),
+                    "frequencia": propaganda.get("frequencia"),
+                    "tipo_programa": propaganda["tipo_programa"],
+                    "fonte": "zara_log",
+                }
+            )
             self._dedupe_cache.add(dedupe_key)
-            logger.debug(f"Veiculação criada: {nome_arquivo} às {propaganda['data_hora']}")
-        else:
-            self.erros += 1
+
+        if not payload:
+            return
+
+        batch_size = max(1, self.config.INGEST_BATCH_SIZE)
+        for i in range(0, len(payload), batch_size):
+            chunk = payload[i:i + batch_size]
+            resultado = self.api_client.create_veiculacoes_batch(chunk)
+            self.veiculacoes_criadas += resultado.get("criadas", 0)
+            self.erros += resultado.get("falhas", 0)
     
     def process_pending_veiculacoes(self):
         """
@@ -492,6 +627,7 @@ class LogMonitor:
         try:
             while True:
                 time.sleep(1)
+                self.flush_pending_file_events()
                 
                 # Processar veiculações periodicamente
                 if self.should_process_veiculacoes():
@@ -503,6 +639,38 @@ class LogMonitor:
         
         observer.join()
         logger.info("Monitor parado")
+
+    def enqueue_file_event(self, filepath: str, date: datetime, frequencia: str):
+        key = (frequencia, filepath)
+        self._pending_events[key] = {
+            "filepath": filepath,
+            "date": date,
+            "frequencia": frequencia,
+            "last_event_at": time.time(),
+        }
+
+    def flush_pending_file_events(self):
+        if not self._pending_events:
+            return
+        now = time.time()
+        debounce = max(0.0, self.config.WATCH_DEBOUNCE_SECONDS)
+        keys_processar = [
+            key for key, ev in self._pending_events.items()
+            if now - ev["last_event_at"] >= debounce
+        ]
+        for key in keys_processar:
+            ev = self._pending_events.pop(key, None)
+            if not ev:
+                continue
+            try:
+                self.process_log_file(
+                    ev["filepath"],
+                    ev["date"],
+                    ev["frequencia"],
+                    incremental=True,
+                )
+            except Exception as e:
+                logger.error(f"Erro ao processar arquivo em debounce: {e}")
 
 
 # ============================================
@@ -542,11 +710,8 @@ class LogFileEventHandler(FileSystemEventHandler):
         else:
             date = datetime.now()
         
-        # Processar arquivo
-        try:
-            self.monitor.process_log_file(event.src_path, date, self.frequencia)
-        except Exception as e:
-            logger.error(f"Erro ao processar arquivo: {e}")
+        # Enfileira para processamento com debounce e leitura incremental.
+        self.monitor.enqueue_file_event(event.src_path, date, self.frequencia)
 
 
 # ============================================

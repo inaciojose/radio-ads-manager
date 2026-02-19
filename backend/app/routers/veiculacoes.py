@@ -28,6 +28,60 @@ router = APIRouter(
     tags=["Veiculações"]
 )
 
+
+def _resolver_veiculacao_existente_query(
+    db: Session,
+    arquivo_audio_id: int,
+    data_hora: datetime,
+    frequencia: Optional[str],
+):
+    query_existente = db.query(models.Veiculacao).filter(
+        models.Veiculacao.arquivo_audio_id == arquivo_audio_id,
+        models.Veiculacao.data_hora == data_hora,
+    )
+    if frequencia is None:
+        query_existente = query_existente.filter(models.Veiculacao.frequencia.is_(None))
+    else:
+        query_existente = query_existente.filter(models.Veiculacao.frequencia == frequencia)
+    return query_existente
+
+
+def _criar_ou_buscar_veiculacao(
+    db: Session,
+    payload: schemas.VeiculacaoCreate,
+):
+    arquivo = db.query(models.ArquivoAudio).filter(
+        models.ArquivoAudio.id == payload.arquivo_audio_id
+    ).first()
+    if not arquivo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Arquivo com ID {payload.arquivo_audio_id} não encontrado"
+        )
+
+    query_existente = _resolver_veiculacao_existente_query(
+        db=db,
+        arquivo_audio_id=payload.arquivo_audio_id,
+        data_hora=payload.data_hora,
+        frequencia=payload.frequencia,
+    )
+    existente = query_existente.first()
+    if existente:
+        return existente, False
+
+    db_veiculacao = models.Veiculacao(**payload.model_dump())
+    db.add(db_veiculacao)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existente = query_existente.first()
+        if existente:
+            return existente, False
+        raise
+    db.refresh(db_veiculacao)
+    return db_veiculacao, True
+
 # ============================================
 # ENDPOINT: Listar veiculações
 # ============================================
@@ -143,45 +197,45 @@ def criar_veiculacao(
         "fonte": "manual"
     }
     """
-    # Verificar se arquivo existe
-    arquivo = db.query(models.ArquivoAudio).filter(
-        models.ArquivoAudio.id == veiculacao.arquivo_audio_id
-    ).first()
-    
-    if not arquivo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Arquivo com ID {veiculacao.arquivo_audio_id} não encontrado"
-        )
-    
-    # Idempotência para evitar duplicidade quando o mesmo evento é recebido mais de uma vez.
-    query_existente = db.query(models.Veiculacao).filter(
-        models.Veiculacao.arquivo_audio_id == veiculacao.arquivo_audio_id,
-        models.Veiculacao.data_hora == veiculacao.data_hora,
-    )
-    if veiculacao.frequencia is None:
-        query_existente = query_existente.filter(models.Veiculacao.frequencia.is_(None))
-    else:
-        query_existente = query_existente.filter(models.Veiculacao.frequencia == veiculacao.frequencia)
+    veiculacao_db, _created = _criar_ou_buscar_veiculacao(db, veiculacao)
+    return veiculacao_db
 
-    veiculacao_existente = query_existente.first()
-    if veiculacao_existente:
-        return veiculacao_existente
 
-    # Criar veiculação
-    db_veiculacao = models.Veiculacao(**veiculacao.model_dump())
-    db.add(db_veiculacao)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        veiculacao_existente = query_existente.first()
-        if veiculacao_existente:
-            return veiculacao_existente
-        raise
-    db.refresh(db_veiculacao)
-    
-    return db_veiculacao
+@router.post("/ingest/lote")
+def ingestao_veiculacoes_lote(
+    payload: List[schemas.VeiculacaoCreate],
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    """
+    Ingestão em lote para monitor de logs.
+    """
+    criadas = 0
+    existentes = 0
+    falhas = 0
+
+    for item in payload:
+        try:
+            _, created = _criar_ou_buscar_veiculacao(db, item)
+            if created:
+                criadas += 1
+            else:
+                existentes += 1
+        except HTTPException:
+            falhas += 1
+        except Exception:
+            falhas += 1
+
+    return {
+        "message": "Ingestão em lote concluída",
+        "success": True,
+        "detalhes": {
+            "recebidas": len(payload),
+            "criadas": criadas,
+            "existentes": existentes,
+            "falhas": falhas,
+        },
+    }
 
 
 @router.post("/lancamentos/lote")

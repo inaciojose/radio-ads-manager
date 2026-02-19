@@ -293,6 +293,42 @@ def test_lancamento_lote_manual_cria_sem_duplicar(db):
     assert total == 2
 
 
+def test_ingestao_lote_idempotente(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Ingestao",
+            cnpj_cpf="78.888.888/0001-78",
+        ),
+        db=db,
+    )
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="lote_ingest.mp3",
+        titulo="Lote ingest",
+    )
+    db.add(arquivo)
+    db.commit()
+    db.refresh(arquivo)
+
+    evento = schemas.VeiculacaoCreate(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime.now().replace(microsecond=0),
+        frequencia="102.7",
+        tipo_programa="musical",
+        fonte="zara_log",
+    )
+    resp = veiculacoes_router.ingestao_veiculacoes_lote(
+        payload=[evento, evento],
+        db=db,
+    )
+
+    assert resp["success"] is True
+    assert resp["detalhes"]["recebidas"] == 2
+    assert resp["detalhes"]["criadas"] == 1
+    assert resp["detalhes"]["existentes"] == 1
+    assert resp["detalhes"]["falhas"] == 0
+
+
 def test_atualizar_item_contrato_altera_quantidade(db):
     cliente = clientes_router.criar_cliente(
         schemas.ClienteCreate(
