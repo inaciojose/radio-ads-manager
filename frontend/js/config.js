@@ -2,7 +2,12 @@
  * config.js - Configurações da Aplicação
  */
 
-const defaultApiBaseURL = `${window.location.protocol}//${window.location.hostname}:8000`
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1"
+const defaultApiBaseURL = isLocalhost
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
+  : `${window.location.origin}/api`
 
 const CONFIG = {
   // URL da API (permite override com localStorage.RADIO_ADS_API_BASE_URL)
