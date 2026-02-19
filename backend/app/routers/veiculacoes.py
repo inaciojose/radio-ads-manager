@@ -6,7 +6,7 @@ As veiculações são geralmente criadas automaticamente pelo monitor de logs,
 mas estes endpoints permitem consultar, corrigir e processar manualmente.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from sqlalchemy.exc import IntegrityError
@@ -179,6 +179,7 @@ def buscar_veiculacao(
 @router.post("/", response_model=schemas.VeiculacaoResponse, status_code=status.HTTP_201_CREATED)
 def criar_veiculacao(
     veiculacao: schemas.VeiculacaoCreate,
+    response: Response = None,
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
@@ -197,7 +198,9 @@ def criar_veiculacao(
         "fonte": "manual"
     }
     """
-    veiculacao_db, _created = _criar_ou_buscar_veiculacao(db, veiculacao)
+    veiculacao_db, created = _criar_ou_buscar_veiculacao(db, veiculacao)
+    if response is not None and not created:
+        response.status_code = status.HTTP_200_OK
     return veiculacao_db
 
 

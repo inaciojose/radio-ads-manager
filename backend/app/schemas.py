@@ -9,12 +9,9 @@ Diferença entre Model (models.py) e Schema:
 - Schema: Representa dados na API (entrada/saída) (Pydantic)
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator, root_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
-from decimal import Decimal
-
-
 # ============================================
 # SCHEMAS: Cliente
 # ============================================
@@ -29,7 +26,8 @@ class ClienteBase(BaseModel):
     status: str = Field(default="ativo", description="Status: ativo ou inativo")
     observacoes: Optional[str] = None
     
-    @validator('status')
+    @field_validator("status")
+    @classmethod
     def validar_status(cls, v):
         """Valida que o status é um dos valores permitidos"""
         if v not in ['ativo', 'inativo']:
@@ -60,8 +58,7 @@ class ClienteResponse(ClienteBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True  # Permite converter de model SQLAlchemy para Pydantic
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -75,11 +72,11 @@ class ContratoItemBase(BaseModel):
     quantidade_diaria_meta: Optional[int] = Field(None, gt=0, description="Meta diária de chamadas")
     observacoes: Optional[str] = None
 
-    @root_validator(skip_on_failure=True)
-    def validar_meta_total_ou_diaria(cls, values):
-        if not values.get("quantidade_contratada") and not values.get("quantidade_diaria_meta"):
+    @model_validator(mode="after")
+    def validar_meta_total_ou_diaria(self):
+        if not self.quantidade_contratada and not self.quantidade_diaria_meta:
             raise ValueError("Informe quantidade_contratada, quantidade_diaria_meta ou ambas")
-        return values
+        return self
 
 
 class ContratoItemCreate(ContratoItemBase):
@@ -103,8 +100,7 @@ class ContratoItemResponse(ContratoItemBase):
     percentual_execucao: float
     quantidade_restante: Optional[int]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -118,7 +114,8 @@ class ContratoArquivoMetaBase(BaseModel):
     ativo: bool = True
     observacoes: Optional[str] = None
 
-    @validator("modo_veiculacao")
+    @field_validator("modo_veiculacao")
+    @classmethod
     def validar_modo_veiculacao(cls, v):
         if v not in ["fixo", "rodizio"]:
             raise ValueError('modo_veiculacao deve ser "fixo" ou "rodizio"')
@@ -135,7 +132,8 @@ class ContratoArquivoMetaUpdate(BaseModel):
     ativo: Optional[bool] = None
     observacoes: Optional[str] = None
 
-    @validator("modo_veiculacao")
+    @field_validator("modo_veiculacao")
+    @classmethod
     def validar_modo_veiculacao_update(cls, v):
         if v is None:
             return v
@@ -153,8 +151,73 @@ class ContratoArquivoMetaResponse(ContratoArquivoMetaBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# SCHEMAS: Faturamento Mensal de Contrato
+# ============================================
+
+class ContratoFaturamentoMensalBase(BaseModel):
+    competencia: date = Field(..., description="Primeiro dia do mes de competencia")
+    status_nf: str = Field(default="pendente")
+    numero_nf: Optional[str] = Field(None, max_length=50)
+    data_emissao_nf: Optional[date] = None
+    data_pagamento_nf: Optional[date] = None
+    valor_cobrado: Optional[float] = Field(None, ge=0)
+    observacoes: Optional[str] = None
+
+    @field_validator("competencia")
+    @classmethod
+    def validar_competencia_primeiro_dia_mes(cls, v):
+        if v.day != 1:
+            raise ValueError("competencia deve ser o primeiro dia do mes")
+        return v
+
+    @field_validator("status_nf")
+    @classmethod
+    def validar_status_nf_mensal(cls, v):
+        if v not in ["pendente", "emitida", "paga", "cancelada"]:
+            raise ValueError('Status NF mensal deve ser "pendente", "emitida", "paga" ou "cancelada"')
+        return v
+
+
+class ContratoFaturamentoMensalCreate(ContratoFaturamentoMensalBase):
+    pass
+
+
+class ContratoFaturamentoMensalUpdate(BaseModel):
+    status_nf: Optional[str] = None
+    numero_nf: Optional[str] = Field(None, max_length=50)
+    data_emissao_nf: Optional[date] = None
+    data_pagamento_nf: Optional[date] = None
+    valor_cobrado: Optional[float] = Field(None, ge=0)
+    observacoes: Optional[str] = None
+
+    @field_validator("status_nf")
+    @classmethod
+    def validar_status_nf_mensal_update(cls, v):
+        if v is None:
+            return v
+        if v not in ["pendente", "emitida", "paga", "cancelada"]:
+            raise ValueError('Status NF mensal deve ser "pendente", "emitida", "paga" ou "cancelada"')
+        return v
+
+
+class EmitirNotaFiscalMensalRequest(BaseModel):
+    numero_nf: str = Field(..., min_length=1, max_length=50)
+    data_emissao_nf: Optional[date] = None
+    valor_cobrado: Optional[float] = Field(None, ge=0)
+    observacoes: Optional[str] = None
+
+
+class ContratoFaturamentoMensalResponse(ContratoFaturamentoMensalBase):
+    id: int
+    contrato_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -174,37 +237,40 @@ class ContratoBase(BaseModel):
     data_emissao_nf: Optional[date] = None
     observacoes: Optional[str] = None
     
-    @validator('status_contrato')
+    @field_validator("status_contrato")
+    @classmethod
     def validar_status_contrato(cls, v):
         if v not in ['ativo', 'concluído', 'cancelado']:
             raise ValueError('Status inválido')
         return v
     
-    @validator('status_nf')
+    @field_validator("status_nf")
+    @classmethod
     def validar_status_nf(cls, v):
         if v not in ['pendente', 'emitida', 'paga']:
             raise ValueError('Status NF inválido')
         return v
 
-    @validator('frequencia')
+    @field_validator("frequencia")
+    @classmethod
     def validar_frequencia(cls, v):
         if v not in ['102.7', '104.7', 'ambas']:
             raise ValueError('Frequência deve ser "102.7", "104.7" ou "ambas"')
         return v
     
-    @validator('data_fim')
-    def validar_datas(cls, v, values):
-        """Valida que data_fim é maior que data_inicio quando informada"""
-        if v is None:
-            return v
-        if 'data_inicio' in values and v < values['data_inicio']:
+    @model_validator(mode="after")
+    def validar_datas(self):
+        """Valida que data_fim é maior que data_inicio quando informada."""
+        if self.data_fim is None:
+            return self
+        if self.data_fim < self.data_inicio:
             raise ValueError('Data fim deve ser maior que data início')
-        return v
+        return self
 
 
 class ContratoCreate(ContratoBase):
     """Schema para criar contrato com seus itens"""
-    itens: List[ContratoItemCreate] = Field(..., min_items=1, description="Itens do contrato")
+    itens: List[ContratoItemCreate] = Field(..., min_length=1, description="Itens do contrato")
     arquivos_metas: List[ContratoArquivoMetaCreate] = Field(default_factory=list)
 
 
@@ -220,7 +286,8 @@ class ContratoUpdate(BaseModel):
     data_emissao_nf: Optional[date] = None
     observacoes: Optional[str] = None
 
-    @validator('frequencia')
+    @field_validator("frequencia")
+    @classmethod
     def validar_frequencia_update(cls, v):
         if v is None:
             return v
@@ -238,8 +305,7 @@ class ContratoResponse(ContratoBase):
     itens: List[ContratoItemResponse] = []
     arquivos_metas: List[ContratoArquivoMetaResponse] = []
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContratoResumo(BaseModel):
@@ -290,8 +356,7 @@ class ArquivoAudioResponse(ArquivoAudioBase):
     id: int
     data_upload: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -307,7 +372,8 @@ class VeiculacaoBase(BaseModel):
     tipo_programa: Optional[str] = None
     fonte: str = "zara_log"
 
-    @validator('frequencia')
+    @field_validator("frequencia")
+    @classmethod
     def validar_frequencia_veiculacao(cls, v):
         if v is None:
             return v
@@ -325,12 +391,13 @@ class VeiculacaoLoteManualCreate(BaseModel):
     """Schema para lançamento manual em lote (OBS/manual)."""
     arquivo_audio_id: int
     data: date
-    horarios: List[str] = Field(..., min_items=1, description="Lista HH:MM ou HH:MM:SS")
+    horarios: List[str] = Field(..., min_length=1, description="Lista HH:MM ou HH:MM:SS")
     frequencia: str = Field(..., description='Frequência: 102.7 ou 104.7')
     tipo_programa: Optional[str] = None
     fonte: str = Field(default="obs_manual")
 
-    @validator("frequencia")
+    @field_validator("frequencia")
+    @classmethod
     def validar_frequencia_lote(cls, v):
         if v not in ["102.7", "104.7"]:
             raise ValueError('Frequência da veiculação deve ser "102.7" ou "104.7"')
@@ -343,8 +410,7 @@ class VeiculacaoResponse(VeiculacaoBase):
     processado: bool
     contabilizada: bool
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VeiculacaoDetalhada(BaseModel):
@@ -397,7 +463,8 @@ class UsuarioBase(BaseModel):
     role: str = Field(default="operador")
     ativo: bool = True
 
-    @validator("role")
+    @field_validator("role")
+    @classmethod
     def validar_role(cls, v):
         if v not in ["admin", "operador"]:
             raise ValueError('Role deve ser "admin" ou "operador"')
@@ -415,7 +482,8 @@ class UsuarioUpdate(BaseModel):
     ativo: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=6)
 
-    @validator("role")
+    @field_validator("role")
+    @classmethod
     def validar_role_update(cls, v):
         if v is None:
             return v
@@ -429,8 +497,7 @@ class UsuarioResponse(UsuarioBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):

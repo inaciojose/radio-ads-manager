@@ -2,13 +2,14 @@ from datetime import date, datetime
 import os
 
 import pytest
+from fastapi import HTTPException
 
 # Mantém os testes independentes do banco de runtime.
 os.environ["DATABASE_URL"] = "sqlite:///./test_radio_ads.db"
 
 from app import models, schemas
 from app.auth import hash_password
-from app.database import Base, SessionLocal, engine
+from app.database import Base, SessionLocal, engine, init_db
 from app.main import health_check
 from app.routers import auth as auth_router
 from app.routers import clientes as clientes_router
@@ -20,7 +21,7 @@ from log_monitor.monitor import APIClient, Config, ZaraLogParser
 @pytest.fixture(autouse=True)
 def reset_database():
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    init_db()
     yield
 
 
@@ -702,3 +703,119 @@ def test_parser_linha_real_com_pasta_chamadas():
     assert parsed is not None
     assert parsed["nome_arquivo"] == "(59) PARAISO HOTEL FAMILIAR (17-10-14).mp3"
     assert parsed["frequencia"] == "102.7"
+
+
+def test_parser_ignora_evento_interrompido():
+    config = Config()
+    parser = ZaraLogParser(config)
+    base_date = datetime(2026, 2, 16)
+    line = (
+        "06:42:47\tInterrompido\tMain\tdefault\t"
+        r"J:\AZARASTUDIO\CHAMADAS\SPOT_CLIENTE.mp3"
+    )
+
+    parsed = parser.parse_line(line, base_date, "102.7")
+    assert parsed is None
+
+
+def test_criar_e_listar_faturamento_mensal_contrato(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Faturamento",
+            cnpj_cpf="10.101.010/0001-10",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 10),
+            data_fim=None,
+            valor_total=1200,
+            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=10)],
+        ),
+        db=db,
+    )
+
+    faturamento = contratos_router.criar_faturamento_mensal_contrato(
+        contrato_id=contrato.id,
+        payload=schemas.ContratoFaturamentoMensalCreate(
+            competencia=date(2026, 2, 1),
+            status_nf="pendente",
+            valor_cobrado=1200,
+        ),
+        db=db,
+    )
+    assert faturamento.competencia == date(2026, 2, 1)
+    assert faturamento.status_nf == "pendente"
+
+    encontrados = contratos_router.listar_faturamentos_mensais_contrato(
+        contrato_id=contrato.id,
+        competencia="2026-02",
+        status_nf=None,
+        db=db,
+    )
+    assert len(encontrados) == 1
+    assert encontrados[0].id == faturamento.id
+
+
+def test_emitir_nf_mensal_cria_on_demand(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Emissao Mensal",
+            cnpj_cpf="20.202.020/0001-20",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=None,
+            valor_total=2200,
+            itens=[schemas.ContratoItemCreate(tipo_programa="jornal", quantidade_contratada=20)],
+        ),
+        db=db,
+    )
+
+    emitido = contratos_router.emitir_nota_fiscal_mensal_contrato(
+        contrato_id=contrato.id,
+        competencia="2026-03",
+        payload=schemas.EmitirNotaFiscalMensalRequest(
+            numero_nf="NF-2026-03-0001",
+            valor_cobrado=2200,
+        ),
+        db=db,
+    )
+    assert emitido.competencia == date(2026, 3, 1)
+    assert emitido.status_nf == "emitida"
+    assert emitido.numero_nf == "NF-2026-03-0001"
+
+
+def test_competencia_invalida_retorna_400(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Competencia",
+            cnpj_cpf="30.303.030/0001-30",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=None,
+            valor_total=1500,
+            itens=[schemas.ContratoItemCreate(tipo_programa="esporte", quantidade_contratada=15)],
+        ),
+        db=db,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        contratos_router.listar_faturamentos_mensais_contrato(
+            contrato_id=contrato.id,
+            competencia="2026-13",
+            status_nf=None,
+            db=db,
+        )
+    assert excinfo.value.status_code == 400

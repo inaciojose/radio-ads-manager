@@ -13,13 +13,55 @@ from sqlalchemy.orm import Session
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app import models, schemas
 from app.database import get_db
-from app.services.contratos_service import criar_contrato_com_itens
+from app.services.contratos_service import (
+    NumeroContratoConflictError,
+    criar_contrato_com_itens,
+)
 
 
 router = APIRouter(
     prefix="/contratos",
     tags=["Contratos"],
 )
+
+
+def _parse_competencia_yyyy_mm(valor: str) -> date:
+    raw = (valor or "").strip()
+    if len(raw) != 7 or raw[4] != "-":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Competencia invalida. Use o formato YYYY-MM.",
+        )
+    try:
+        ano = int(raw[:4])
+        mes = int(raw[5:7])
+        return date(ano, mes, 1)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Competencia invalida. Use o formato YYYY-MM.",
+        )
+
+
+def _validar_competencia_no_periodo_contrato(
+    contrato: models.Contrato,
+    competencia: date,
+) -> None:
+    inicio_comp = date(competencia.year, competencia.month, 1)
+    if contrato.data_inicio:
+        inicio_contrato = date(contrato.data_inicio.year, contrato.data_inicio.month, 1)
+        if inicio_comp < inicio_contrato:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Competencia anterior ao inicio do contrato.",
+            )
+    if contrato.data_fim:
+        fim_contrato = date(contrato.data_fim.year, contrato.data_fim.month, 1)
+        if inicio_comp > fim_contrato:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Competencia posterior ao fim do contrato.",
+            )
 
 
 def _validar_arquivo_do_cliente(db: Session, cliente_id: int, arquivo_audio_id: int):
@@ -273,7 +315,19 @@ def criar_contrato(
     for meta in contrato.arquivos_metas:
         _validar_arquivo_do_cliente(db, contrato.cliente_id, meta.arquivo_audio_id)
 
-    return criar_contrato_com_itens(db, contrato)
+    try:
+        return criar_contrato_com_itens(db, contrato)
+    except NumeroContratoConflictError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflito ao gerar numero do contrato. Tente novamente.",
+        )
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dados invalidos para criacao do contrato.",
+        )
 
 
 @router.post("/{contrato_id}/itens", response_model=schemas.ContratoItemResponse, status_code=status.HTTP_201_CREATED)
@@ -513,6 +567,156 @@ def atualizar_nota_fiscal(
             "data_emissao_nf": db_contrato.data_emissao_nf,
         },
     }
+
+
+@router.get(
+    "/{contrato_id}/faturamentos",
+    response_model=List[schemas.ContratoFaturamentoMensalResponse],
+)
+def listar_faturamentos_mensais_contrato(
+    contrato_id: int,
+    competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
+    status_nf: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    query = db.query(models.ContratoFaturamentoMensal).filter(
+        models.ContratoFaturamentoMensal.contrato_id == contrato_id
+    )
+
+    if competencia:
+        competencia_ref = _parse_competencia_yyyy_mm(competencia)
+        query = query.filter(models.ContratoFaturamentoMensal.competencia == competencia_ref)
+
+    if status_nf:
+        query = query.filter(models.ContratoFaturamentoMensal.status_nf == status_nf)
+
+    return query.order_by(models.ContratoFaturamentoMensal.competencia.desc()).all()
+
+
+@router.post(
+    "/{contrato_id}/faturamentos",
+    response_model=schemas.ContratoFaturamentoMensalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_faturamento_mensal_contrato(
+    contrato_id: int,
+    payload: schemas.ContratoFaturamentoMensalCreate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    _validar_competencia_no_periodo_contrato(contrato, payload.competencia)
+
+    faturamento = models.ContratoFaturamentoMensal(
+        contrato_id=contrato_id,
+        competencia=payload.competencia,
+        status_nf=payload.status_nf,
+        numero_nf=payload.numero_nf,
+        data_emissao_nf=payload.data_emissao_nf,
+        data_pagamento_nf=payload.data_pagamento_nf,
+        valor_cobrado=payload.valor_cobrado,
+        observacoes=payload.observacoes,
+    )
+    db.add(faturamento)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ja existe faturamento para essa competencia neste contrato.",
+        )
+    db.refresh(faturamento)
+    return faturamento
+
+
+@router.post(
+    "/{contrato_id}/faturamentos/{competencia}/emitir",
+    response_model=schemas.ContratoFaturamentoMensalResponse,
+)
+def emitir_nota_fiscal_mensal_contrato(
+    contrato_id: int,
+    competencia: str,
+    payload: schemas.EmitirNotaFiscalMensalRequest,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    competencia_ref = _parse_competencia_yyyy_mm(competencia)
+    _validar_competencia_no_periodo_contrato(contrato, competencia_ref)
+
+    faturamento = db.query(models.ContratoFaturamentoMensal).filter(
+        models.ContratoFaturamentoMensal.contrato_id == contrato_id,
+        models.ContratoFaturamentoMensal.competencia == competencia_ref,
+    ).first()
+
+    if not faturamento:
+        faturamento = models.ContratoFaturamentoMensal(
+            contrato_id=contrato_id,
+            competencia=competencia_ref,
+            status_nf="pendente",
+        )
+        db.add(faturamento)
+        db.flush()
+
+    faturamento.status_nf = "emitida"
+    faturamento.numero_nf = payload.numero_nf
+    faturamento.data_emissao_nf = payload.data_emissao_nf or date.today()
+    if payload.valor_cobrado is not None:
+        faturamento.valor_cobrado = payload.valor_cobrado
+    if payload.observacoes is not None:
+        faturamento.observacoes = payload.observacoes
+
+    db.commit()
+    db.refresh(faturamento)
+    return faturamento
+
+
+@router.patch(
+    "/faturamentos/{faturamento_id}",
+    response_model=schemas.ContratoFaturamentoMensalResponse,
+)
+def atualizar_faturamento_mensal(
+    faturamento_id: int,
+    payload: schemas.ContratoFaturamentoMensalUpdate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    faturamento = db.query(models.ContratoFaturamentoMensal).filter(
+        models.ContratoFaturamentoMensal.id == faturamento_id
+    ).first()
+    if not faturamento:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Faturamento mensal com ID {faturamento_id} nao encontrado",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(faturamento, field, value)
+
+    db.commit()
+    db.refresh(faturamento)
+    return faturamento
 
 
 @router.delete("/{contrato_id}", response_model=schemas.MessageResponse)

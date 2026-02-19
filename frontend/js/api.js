@@ -235,6 +235,34 @@ class API {
     })
   }
 
+  async getContratoFaturamentosMensais(contratoId, params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(
+      `/contratos/${contratoId}/faturamentos${query ? "?" + query : ""}`,
+    )
+  }
+
+  async createContratoFaturamentoMensal(contratoId, data) {
+    return this.request(`/contratos/${contratoId}/faturamentos`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async emitirNotaFiscalMensal(contratoId, competencia, data) {
+    return this.request(`/contratos/${contratoId}/faturamentos/${competencia}/emitir`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateFaturamentoMensal(faturamentoId, data) {
+    return this.request(`/contratos/faturamentos/${faturamentoId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    })
+  }
+
   async updateNotaFiscal(id, params) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/contratos/${id}/nota-fiscal?${query}`, {

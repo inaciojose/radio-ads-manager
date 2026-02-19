@@ -4,6 +4,7 @@
 
 let contratosCache = []
 const clientesPorIdCache = {}
+const faturamentoResumoPorContrato = {}
 
 const contratosState = {
   page: 1,
@@ -14,6 +15,11 @@ const contratosState = {
 
 const contratoModalState = {
   arquivosCliente: [],
+}
+
+const faturamentoMensalState = {
+  contratoId: null,
+  contratoNumero: "",
 }
 
 async function loadContratos(page = 1) {
@@ -46,12 +52,51 @@ async function loadContratos(page = 1) {
     contratosState.hasNext = contratos.length === contratosState.pageSize
 
     await hydrateClientesNomes(contratos)
+    await hydrateFaturamentoMensalResumo(contratos)
     renderContratos(contratos, clientesPorIdCache)
     updateContratosPagination()
   } catch (error) {
     showToast(error.message || "Erro ao carregar contratos", "error")
   } finally {
     hideLoading()
+  }
+}
+
+function getCompetenciaAtual() {
+  const now = new Date()
+  const mes = String(now.getMonth() + 1).padStart(2, "0")
+  return `${now.getFullYear()}-${mes}`
+}
+
+async function hydrateFaturamentoMensalResumo(contratos) {
+  const competenciaAtual = getCompetenciaAtual()
+  const ids = [...new Set(contratos.map((c) => c.id))].filter(Boolean)
+  if (!ids.length) return
+
+  const pendentes = ids.filter(
+    (id) => !faturamentoResumoPorContrato[id] || faturamentoResumoPorContrato[id].competencia !== competenciaAtual,
+  )
+  if (!pendentes.length) return
+
+  const resultados = await Promise.all(
+    pendentes.map(async (contratoId) => {
+      try {
+        const itens = await api.getContratoFaturamentosMensais(contratoId, {
+          competencia: competenciaAtual,
+        })
+        const atual = Array.isArray(itens) && itens.length ? itens[0] : null
+        return { contratoId, atual, competencia: competenciaAtual }
+      } catch {
+        return { contratoId, atual: null, competencia: competenciaAtual }
+      }
+    }),
+  )
+
+  for (const item of resultados) {
+    faturamentoResumoPorContrato[item.contratoId] = {
+      competencia: item.competencia,
+      atual: item.atual,
+    }
   }
 }
 
@@ -78,6 +123,19 @@ function renderContratos(items, clientesPorId) {
 
   tbody.innerHTML = items
     .map((c) => {
+      const resumoMensal = faturamentoResumoPorContrato[c.id]
+      const faturamentoAtual = resumoMensal?.atual || null
+      const competenciaAtual = getCompetenciaAtual()
+      const resumoMensalHtml = faturamentoAtual
+        ? `<div class="contrato-nf-mensal">
+             <small>Mês ${competenciaAtual}: ${getStatusBadge(faturamentoAtual.status_nf, "nf")}</small>
+           </div>`
+        : !c.data_fim
+          ? `<div class="contrato-nf-mensal">
+               <small>Mês ${competenciaAtual}: <span class="badge badge-secondary">Sem lançamento</span></small>
+             </div>`
+          : ""
+
       const metas = c.arquivos_metas || []
       const usaMetas = metas.length > 0
       const totalContratado = usaMetas
@@ -91,15 +149,19 @@ function renderContratos(items, clientesPorId) {
       <tr>
         <td>${escapeHtml(c.numero_contrato || "-")}</td>
         <td>${escapeHtml(clientesPorId[c.cliente_id] || String(c.cliente_id))}</td>
-        <td>${formatDate(c.data_inicio)} a ${c.data_fim ? formatDate(c.data_fim) : "Sem prazo"}</td>
+        <td>
+          ${formatDate(c.data_inicio)} a ${c.data_fim ? formatDate(c.data_fim) : "Sem prazo"}
+          ${!c.data_fim ? '<div><span class="badge badge-info">Recorrente</span></div>' : ""}
+        </td>
         <td>${getProgressBar(totalExecutado, totalContratado)}</td>
         <td>${formatCurrency(c.valor_total)}</td>
-        <td>${getStatusBadge(c.status_nf, "nf")}</td>
+        <td>${getStatusBadge(c.status_nf, "nf")}${resumoMensalHtml}</td>
         <td>${getStatusBadge(c.status_contrato, "contrato")}</td>
         <td>
           ${
             canWrite()
               ? `<button class="btn btn-sm btn-secondary" onclick="showContratoModal(${c.id})">Editar</button>
+                 <button class="btn btn-sm btn-warning" onclick="showFaturamentoMensalModal(${c.id})">Mensal</button>
                  <button class="btn btn-sm btn-primary" onclick="showNotaFiscalModal(${c.id})">NF</button>
                  <button class="btn btn-sm btn-danger" onclick="removerContrato(${c.id})">Excluir</button>`
               : '<span class="badge badge-secondary">Somente leitura</span>'
@@ -707,6 +769,227 @@ async function removerContrato(id) {
     await loadContratos(contratosState.page)
   } catch (error) {
     showToast(error.message || "Erro ao excluir contrato", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+function _getCompetenciaInputOrCurrent() {
+  const input = document.getElementById("faturamento-competencia")
+  const raw = (input?.value || "").trim()
+  if (raw) return raw
+  const now = new Date()
+  const mes = String(now.getMonth() + 1).padStart(2, "0")
+  const atual = `${now.getFullYear()}-${mes}`
+  if (input) input.value = atual
+  return atual
+}
+
+function _competenciaMonthToDateString(competenciaMonth) {
+  return `${competenciaMonth}-01`
+}
+
+function _formatCompetencia(competenciaDate) {
+  if (!competenciaDate) return "-"
+  const raw = String(competenciaDate)
+  const parts = raw.split("-")
+  if (parts.length < 2) return raw
+  return `${parts[1]}/${parts[0]}`
+}
+
+function _getStatusNfMensalBadge(status) {
+  const map = {
+    pendente: '<span class="badge badge-warning">Pendente</span>',
+    emitida: '<span class="badge badge-info">Emitida</span>',
+    paga: '<span class="badge badge-success">Paga</span>',
+    cancelada: '<span class="badge badge-danger">Cancelada</span>',
+  }
+  return map[status] || escapeHtml(status || "-")
+}
+
+function _buildStatusMensalOptions(selected) {
+  const opts = ["pendente", "emitida", "paga", "cancelada"]
+  return opts
+    .map(
+      (status) =>
+        `<option value="${status}" ${status === selected ? "selected" : ""}>${escapeHtml(status)}</option>`,
+    )
+    .join("")
+}
+
+async function showFaturamentoMensalModal(contratoId) {
+  if (!requireWriteAccess()) return
+  const contrato = contratosCache.find((c) => c.id === Number(contratoId)) || (await api.getContrato(contratoId))
+  if (!contrato) {
+    showToast("Contrato não encontrado", "error")
+    return
+  }
+
+  faturamentoMensalState.contratoId = contrato.id
+  faturamentoMensalState.contratoNumero = contrato.numero_contrato || `#${contrato.id}`
+
+  document.getElementById("faturamento-contrato-id").value = String(contrato.id)
+  document.getElementById("faturamento-contrato-label").textContent = `Contrato ${faturamentoMensalState.contratoNumero}`
+  document.getElementById("faturamento-filtro-status").value = ""
+  _getCompetenciaInputOrCurrent()
+  document.getElementById("faturamento-status-inicial").value = "pendente"
+  document.getElementById("faturamento-numero-nf").value = ""
+  document.getElementById("faturamento-data-emissao").value = ""
+  document.getElementById("faturamento-data-pagamento").value = ""
+  document.getElementById("faturamento-valor").value = ""
+  document.getElementById("faturamento-observacoes").value = ""
+
+  openModal("modal-faturamento-mensal")
+  await loadFaturamentosMensais()
+}
+
+async function loadFaturamentosMensais() {
+  const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
+  if (!contratoId) return
+
+  const competencia = (document.getElementById("faturamento-competencia")?.value || "").trim()
+  const statusNf = document.getElementById("faturamento-filtro-status")?.value
+
+  try {
+    showLoading()
+    const items = await api.getContratoFaturamentosMensais(contratoId, {
+      ...(competencia ? { competencia } : {}),
+      ...(statusNf ? { status_nf: statusNf } : {}),
+    })
+    renderFaturamentosMensais(items || [])
+  } catch (error) {
+    showToast(error.message || "Erro ao carregar faturamentos mensais", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+function renderFaturamentosMensais(items) {
+  const tbody = document.querySelector("#table-faturamentos-mensais tbody")
+  if (!tbody) return
+
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Sem faturamentos mensais</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = items
+    .map(
+      (f) => `
+      <tr data-faturamento-id="${f.id}">
+        <td>${_formatCompetencia(f.competencia)}</td>
+        <td>${_getStatusNfMensalBadge(f.status_nf)}</td>
+        <td><input type="text" class="faturamento-numero-nf" value="${escapeHtml(f.numero_nf || "")}" /></td>
+        <td><input type="date" class="faturamento-data-emissao" value="${f.data_emissao_nf || ""}" /></td>
+        <td><input type="date" class="faturamento-data-pagamento" value="${f.data_pagamento_nf || ""}" /></td>
+        <td><input type="number" min="0" step="0.01" class="faturamento-valor" value="${f.valor_cobrado ?? ""}" /></td>
+        <td>
+          <select class="faturamento-status-nf">
+            ${_buildStatusMensalOptions(f.status_nf)}
+          </select>
+          <input type="text" class="faturamento-observacoes" value="${escapeHtml(f.observacoes || "")}" placeholder="Observações" />
+        </td>
+        <td>
+          <button class="btn btn-sm btn-secondary" onclick="salvarFaturamentoMensal(${f.id})">Salvar</button>
+        </td>
+      </tr>
+    `,
+    )
+    .join("")
+}
+
+async function criarFaturamentoMensalManual() {
+  if (!requireWriteAccess()) return
+  const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
+  if (!contratoId) return
+
+  const competencia = _getCompetenciaInputOrCurrent()
+  const statusNf = document.getElementById("faturamento-status-inicial")?.value || "pendente"
+  const numeroNf = document.getElementById("faturamento-numero-nf")?.value.trim() || null
+  const dataEmissao = document.getElementById("faturamento-data-emissao")?.value || null
+  const dataPagamento = document.getElementById("faturamento-data-pagamento")?.value || null
+  const valorRaw = document.getElementById("faturamento-valor")?.value
+  const observacoes = document.getElementById("faturamento-observacoes")?.value.trim() || null
+
+  try {
+    showLoading()
+    await api.createContratoFaturamentoMensal(contratoId, {
+      competencia: _competenciaMonthToDateString(competencia),
+      status_nf: statusNf,
+      numero_nf: numeroNf,
+      data_emissao_nf: dataEmissao,
+      data_pagamento_nf: dataPagamento,
+      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      observacoes,
+    })
+    showToast("Faturamento mensal criado", "success")
+    await loadFaturamentosMensais()
+  } catch (error) {
+    showToast(error.message || "Erro ao criar faturamento mensal", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+async function emitirNotaFiscalMensalAtual() {
+  if (!requireWriteAccess()) return
+  const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
+  if (!contratoId) return
+
+  const competencia = _getCompetenciaInputOrCurrent()
+  const numeroNf = document.getElementById("faturamento-numero-nf")?.value.trim()
+  const dataEmissao = document.getElementById("faturamento-data-emissao")?.value || null
+  const valorRaw = document.getElementById("faturamento-valor")?.value
+  const observacoes = document.getElementById("faturamento-observacoes")?.value.trim() || null
+
+  if (!numeroNf) {
+    showToast("Informe o número da NF para emitir", "warning")
+    return
+  }
+
+  try {
+    showLoading()
+    await api.emitirNotaFiscalMensal(contratoId, competencia, {
+      numero_nf: numeroNf,
+      data_emissao_nf: dataEmissao,
+      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      observacoes,
+    })
+    showToast("NF mensal emitida", "success")
+    await loadFaturamentosMensais()
+  } catch (error) {
+    showToast(error.message || "Erro ao emitir NF mensal", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+async function salvarFaturamentoMensal(faturamentoId) {
+  if (!requireWriteAccess()) return
+  const row = document.querySelector(`tr[data-faturamento-id="${faturamentoId}"]`)
+  if (!row) return
+
+  const statusNf = row.querySelector(".faturamento-status-nf")?.value || "pendente"
+  const numeroNf = row.querySelector(".faturamento-numero-nf")?.value.trim() || null
+  const dataEmissao = row.querySelector(".faturamento-data-emissao")?.value || null
+  const dataPagamento = row.querySelector(".faturamento-data-pagamento")?.value || null
+  const valorRaw = row.querySelector(".faturamento-valor")?.value
+  const observacoes = row.querySelector(".faturamento-observacoes")?.value.trim() || null
+
+  try {
+    showLoading()
+    await api.updateFaturamentoMensal(faturamentoId, {
+      status_nf: statusNf,
+      numero_nf: numeroNf,
+      data_emissao_nf: dataEmissao,
+      data_pagamento_nf: dataPagamento,
+      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      observacoes,
+    })
+    showToast("Faturamento mensal atualizado", "success")
+    await loadFaturamentosMensais()
+  } catch (error) {
+    showToast(error.message || "Erro ao atualizar faturamento mensal", "error")
   } finally {
     hideLoading()
   }

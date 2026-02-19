@@ -167,8 +167,8 @@ class ZaraLogParser:
         if not self.log_pattern.match(hora_str):
             return None
 
-        # Só considera linhas de início de execução.
-        if not action.startswith("inicio") and not action.startswith("in"):
+        # Só considera exatamente eventos de início.
+        if action not in {"inicio", "in"}:
             return None
 
         # Só considera chamadas dentro da pasta padrão da rádio.

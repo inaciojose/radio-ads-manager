@@ -39,6 +39,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+def _ensure_sqlite_indexes() -> None:
+    """
+    Mantém índices funcionais que não são expressos no metadata.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_veiculacoes_evento
+                ON veiculacoes (arquivo_audio_id, data_hora, IFNULL(frequencia, ''))
+                """
+            )
+        )
+
+
 # ============================================
 # FUNÇÃO AUXILIAR PARA CRIAR SESSÕES
 # ============================================
@@ -76,6 +91,7 @@ def init_db():
     
     if IS_SQLITE:
         Base.metadata.create_all(bind=engine)
+        _ensure_sqlite_indexes()
         print(f"✅ Banco de dados SQLite inicializado em: {SQLALCHEMY_DATABASE_URL}")
         return
 
