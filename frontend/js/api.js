@@ -211,6 +211,30 @@ class API {
     })
   }
 
+  async getContratoArquivosMetas(contratoId) {
+    return this.request(`/contratos/${contratoId}/arquivos-metas`)
+  }
+
+  async createContratoArquivoMeta(contratoId, data) {
+    return this.request(`/contratos/${contratoId}/arquivos-metas`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateContratoArquivoMeta(contratoId, metaId, data) {
+    return this.request(`/contratos/${contratoId}/arquivos-metas/${metaId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteContratoArquivoMeta(contratoId, metaId) {
+    return this.request(`/contratos/${contratoId}/arquivos-metas/${metaId}`, {
+      method: "DELETE",
+    })
+  }
+
   async updateNotaFiscal(id, params) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/contratos/${id}/nota-fiscal?${query}`, {
@@ -270,6 +294,13 @@ class API {
     const query = new URLSearchParams(params).toString()
     return this.request(`/veiculacoes/processar${query ? "?" + query : ""}`, {
       method: "POST",
+    })
+  }
+
+  async criarLoteVeiculacoes(data) {
+    return this.request("/veiculacoes/lancamentos/lote", {
+      method: "POST",
+      body: JSON.stringify(data),
     })
   }
 

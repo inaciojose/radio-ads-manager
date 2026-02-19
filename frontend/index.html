@@ -303,6 +303,9 @@
                 onchange="loadVeiculacoes()"
               />
             </div>
+            <button class="btn btn-primary" data-requires-write="true" onclick="showLoteVeiculacaoModal()">
+              <i class="fas fa-plus"></i> Lançar OBS em Lote
+            </button>
             <button class="btn btn-success" data-requires-write="true" onclick="processarVeiculacoes()">
               <i class="fas fa-cogs"></i> Processar Veiculações
             </button>
@@ -509,7 +512,7 @@
 
             <div class="form-group">
               <label>Cliente *</label>
-              <select id="contrato-cliente" required></select>
+              <select id="contrato-cliente" required onchange="onContratoClienteChange()"></select>
             </div>
 
             <div class="form-row">
@@ -589,6 +592,26 @@
             <div id="contrato-item-edit-section" style="display: none">
               <h4>Itens do Contrato</h4>
               <div id="contrato-itens-edit-list"></div>
+            </div>
+
+            <div id="contrato-meta-create-section">
+              <h4>Metas por Arquivo (Opcional)</h4>
+              <div class="form-group">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addContratoMetaCreateRow()">
+                  <i class="fas fa-plus"></i> Adicionar Meta por Arquivo
+                </button>
+              </div>
+              <div id="contrato-metas-create-list"></div>
+            </div>
+
+            <div id="contrato-meta-edit-section" style="display: none">
+              <h4>Metas por Arquivo</h4>
+              <div class="form-group">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addContratoMetaEditRow()">
+                  <i class="fas fa-plus"></i> Nova Meta por Arquivo
+                </button>
+              </div>
+              <div id="contrato-metas-edit-list"></div>
             </div>
 
             <div class="form-group">
@@ -783,6 +806,51 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="saveUsuario()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Veiculação Lote Modal -->
+    <div id="modal-veiculacao-lote" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Lançamento Manual em Lote (OBS)</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-veiculacao-lote">
+            <div class="form-group">
+              <label>Arquivo *</label>
+              <select id="lote-arquivo" required></select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Data *</label>
+                <input type="date" id="lote-data" required />
+              </div>
+              <div class="form-group">
+                <label>Frequência *</label>
+                <select id="lote-frequencia" required>
+                  <option value="102.7">102.7</option>
+                  <option value="104.7">104.7</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Tipo de Programa</label>
+              <input type="text" id="lote-tipo-programa" placeholder="esporte, jornal..." />
+            </div>
+            <div class="form-group">
+              <label>Horários (um por linha) *</label>
+              <textarea id="lote-horarios" rows="6" placeholder="11:00&#10;11:30&#10;12:05"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveLoteVeiculacoes()">Salvar Lote</button>
         </div>
       </div>
     </div>

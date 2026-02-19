@@ -580,6 +580,36 @@ body {
   grid-template-columns: 2fr 1fr;
 }
 
+.contrato-meta-row {
+  border: 1px solid var(--gray-light);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.contrato-meta-row.is-deleting {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.contrato-meta-grid {
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+}
+
+.contrato-meta-grid-footer {
+  grid-template-columns: 3fr 1fr;
+  align-items: end;
+}
+
+.contrato-meta-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.contrato-meta-hint {
+  color: var(--gray);
+}
+
 /* ============================================
    MODALS
    ============================================ */
@@ -870,5 +900,16 @@ body {
 
   .search-box {
     width: 100%;
+  }
+
+  .form-row,
+  .contrato-item-edit-row .form-row,
+  .contrato-meta-grid,
+  .contrato-meta-grid-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .contrato-meta-actions {
+    justify-content: flex-start;
   }
 }
