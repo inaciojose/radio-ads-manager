@@ -5,7 +5,20 @@ Aqui definimos as classes Python que representam as tabelas do banco.
 O SQLAlchemy converte essas classes em tabelas automaticamente.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text, Date, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -121,11 +134,6 @@ class Contrato(Base):
     itens = relationship("ContratoItem", back_populates="contrato", cascade="all, delete-orphan")
     arquivos_metas = relationship("ContratoArquivoMeta", back_populates="contrato", cascade="all, delete-orphan")
     veiculacoes = relationship("Veiculacao", back_populates="contrato")
-    faturamentos_mensais = relationship(
-        "ContratoFaturamentoMensal",
-        back_populates="contrato",
-        cascade="all, delete-orphan",
-    )
     notas_fiscais = relationship(
         "NotaFiscal",
         back_populates="contrato",
@@ -216,30 +224,6 @@ class ContratoArquivoMeta(Base):
         return max(0, self.quantidade_meta - self.quantidade_executada)
 
 
-class ContratoFaturamentoMensal(Base):
-    """
-    Controle de nota fiscal por competencia mensal de contrato.
-    """
-    __tablename__ = "contrato_faturamentos_mensais"
-    __table_args__ = (
-        UniqueConstraint("contrato_id", "competencia", name="uq_contrato_faturamento_competencia"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False, index=True)
-    competencia = Column(Date, nullable=False, index=True)  # primeiro dia do mes (YYYY-MM-01)
-    status_nf = Column(String(20), default="pendente", nullable=False)  # pendente|emitida|paga|cancelada
-    numero_nf = Column(String(50))
-    data_emissao_nf = Column(Date)
-    data_pagamento_nf = Column(Date)
-    valor_cobrado = Column(Float)
-    observacoes = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    contrato = relationship("Contrato", back_populates="faturamentos_mensais")
-
-
 class NotaFiscal(Base):
     """
     Nota fiscal de contrato (dinamica unica ou mensal).
@@ -247,6 +231,13 @@ class NotaFiscal(Base):
     __tablename__ = "notas_fiscais"
     __table_args__ = (
         UniqueConstraint("contrato_id", "tipo", "competencia", name="uq_nota_fiscal_competencia"),
+        Index(
+            "uq_notas_fiscais_unica_por_contrato",
+            "contrato_id",
+            unique=True,
+            sqlite_where=text("tipo = 'unica'"),
+            postgresql_where=text("tipo = 'unica'"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)

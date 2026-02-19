@@ -14,6 +14,7 @@ from app.main import health_check
 from app.routers import auth as auth_router
 from app.routers import clientes as clientes_router
 from app.routers import contratos as contratos_router
+from app.routers import notas_fiscais as notas_fiscais_router
 from app.routers import veiculacoes as veiculacoes_router
 from log_monitor.monitor import APIClient, Config, ZaraLogParser
 
@@ -768,15 +769,16 @@ def test_criar_e_listar_faturamento_mensal_contrato(db):
 
     faturamento = contratos_router.criar_faturamento_mensal_contrato(
         contrato_id=contrato.id,
-        payload=schemas.ContratoFaturamentoMensalCreate(
+        payload=schemas.NotaFiscalCreate(
+            tipo="mensal",
             competencia=date(2026, 2, 1),
-            status_nf="pendente",
-            valor_cobrado=1200,
+            status="pendente",
+            valor=1200,
         ),
         db=db,
     )
     assert faturamento.competencia == date(2026, 2, 1)
-    assert faturamento.status_nf == "pendente"
+    assert faturamento.status == "pendente"
 
     encontrados = contratos_router.listar_faturamentos_mensais_contrato(
         contrato_id=contrato.id,
@@ -823,8 +825,8 @@ def test_emitir_nf_mensal_cria_on_demand(db):
         db=db,
     )
     assert emitido.competencia == date(2026, 3, 1)
-    assert emitido.status_nf == "emitida"
-    assert emitido.numero_nf == "NF-2026-03-0001"
+    assert emitido.status == "emitida"
+    assert emitido.numero == "NF-2026-03-0001"
 
 
 def test_competencia_invalida_retorna_400(db):
@@ -941,6 +943,104 @@ def test_criar_nota_mensal_em_contrato_unico_retorna_400(db):
             db=db,
         )
     assert excinfo.value.status_code == 400
+
+
+def test_nota_unica_duplicada_no_mesmo_contrato_retorna_400(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente NF Duplicada",
+            cnpj_cpf="35.353.535/0001-35",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=date(2026, 2, 1),
+            nf_dinamica="unica",
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=5,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    contratos_router.criar_nota_fiscal_contrato(
+        contrato_id=contrato.id,
+        payload=schemas.NotaFiscalCreate(
+            tipo="unica",
+            status="emitida",
+            numero="NF-DUP-001",
+        ),
+        db=db,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        contratos_router.criar_nota_fiscal_contrato(
+            contrato_id=contrato.id,
+            payload=schemas.NotaFiscalCreate(
+                tipo="unica",
+                status="pendente",
+                numero="NF-DUP-002",
+            ),
+            db=db,
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_listar_notas_fiscais_global_com_filtros(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Visao NF",
+            cnpj_cpf="36.363.636/0001-36",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 2, 1),
+            data_fim=date(2026, 12, 31),
+            nf_dinamica="mensal",
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="jornal",
+                    quantidade_contratada=10,
+                )
+            ],
+        ),
+        db=db,
+    )
+    contratos_router.criar_nota_fiscal_contrato(
+        contrato_id=contrato.id,
+        payload=schemas.NotaFiscalCreate(
+            tipo="mensal",
+            competencia=date(2026, 3, 1),
+            status="emitida",
+            numero="NF-GLOBAL-001",
+            valor=900,
+        ),
+        db=db,
+    )
+
+    resp = notas_fiscais_router.listar_notas_fiscais(
+        skip=0,
+        limit=20,
+        competencia="2026-03",
+        status_nf="emitida",
+        cliente_id=cliente.id,
+        db=db,
+    )
+
+    assert resp["total"] == 1
+    assert len(resp["items"]) == 1
+    assert resp["items"][0].contrato_id == contrato.id
+    assert resp["items"][0].cliente_nome == cliente.nome
+    assert resp["items"][0].numero == "NF-GLOBAL-001"
 
 
 def test_contrato_fechado_exige_meta_total(db):

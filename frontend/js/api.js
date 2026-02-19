@@ -294,13 +294,6 @@ class API {
     }
   }
 
-  async updateNotaFiscal(id, params) {
-    const query = new URLSearchParams(params).toString()
-    return this.request(`/contratos/${id}/nota-fiscal?${query}`, {
-      method: "PATCH",
-    })
-  }
-
   async getContratoNotasFiscais(contratoId, params = {}) {
     const query = new URLSearchParams(params).toString()
     return this.request(
@@ -326,6 +319,11 @@ class API {
     return this.request(`/contratos/notas-fiscais/${notaId}`, {
       method: "DELETE",
     })
+  }
+
+  async getNotasFiscais(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/notas-fiscais/${query ? "?" + query : ""}`)
   }
 
   async deleteContrato(id) {

@@ -125,24 +125,6 @@ def _validar_tipo_nota_para_contrato(contrato: models.Contrato, tipo_nota: str) 
         )
 
 
-def _nota_para_faturamento_response(
-    nota: models.NotaFiscal,
-) -> schemas.ContratoFaturamentoMensalResponse:
-    return schemas.ContratoFaturamentoMensalResponse(
-        id=nota.id,
-        contrato_id=nota.contrato_id,
-        competencia=nota.competencia,
-        status_nf=nota.status,
-        numero_nf=nota.numero,
-        data_emissao_nf=nota.data_emissao,
-        data_pagamento_nf=nota.data_pagamento,
-        valor_cobrado=nota.valor,
-        observacoes=nota.observacoes,
-        created_at=nota.created_at,
-        updated_at=nota.updated_at,
-    )
-
-
 def _validar_arquivo_do_cliente(db: Session, cliente_id: int, arquivo_audio_id: int):
     arquivo = db.query(models.ArquivoAudio).filter(
         models.ArquivoAudio.id == arquivo_audio_id
@@ -773,6 +755,7 @@ def listar_notas_fiscais_contrato(
     competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
     status_nf: Optional[str] = Query(None, pattern="^(pendente|emitida|paga|cancelada)$"),
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not contrato:
@@ -904,88 +887,35 @@ def deletar_nota_fiscal(
     return {"message": f"Nota fiscal {nota_id} removida com sucesso", "success": True}
 
 
-@router.patch("/{contrato_id}/nota-fiscal")
-def atualizar_nota_fiscal_legacy(
-    contrato_id: int,
-    status_nf: str = Query(..., pattern="^(pendente|emitida|paga)$"),
-    numero_nf: Optional[str] = Query(None),
-    data_emissao: Optional[date] = Query(None),
-    db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
-):
-    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
-    if not contrato:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contrato com ID {contrato_id} nao encontrado",
-        )
-    if contrato.nf_dinamica != "unica":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Endpoint legado de NF aplica-se somente a contratos com dinamica unica.",
-        )
-
-    nota = db.query(models.NotaFiscal).filter(
-        models.NotaFiscal.contrato_id == contrato_id,
-        models.NotaFiscal.tipo == "unica",
-    ).first()
-    if not nota:
-        nota = models.NotaFiscal(
-            contrato_id=contrato_id,
-            tipo="unica",
-            status=status_nf,
-        )
-        db.add(nota)
-        db.flush()
-
-    nota.status = status_nf
-    nota.numero = numero_nf
-    nota.data_emissao = data_emissao
-    _sincronizar_resumo_nf_contrato(db, contrato)
-    db.commit()
-    db.refresh(contrato)
-
-    return {
-        "message": f"Nota fiscal do contrato {contrato.numero_contrato} atualizada",
-        "success": True,
-        "contrato": {
-            "id": contrato.id,
-            "numero_contrato": contrato.numero_contrato,
-            "status_nf": contrato.status_nf,
-            "numero_nf": contrato.numero_nf,
-            "data_emissao_nf": contrato.data_emissao_nf,
-        },
-    }
-
-
 @router.get(
     "/{contrato_id}/faturamentos",
-    response_model=List[schemas.ContratoFaturamentoMensalResponse],
+    response_model=List[schemas.NotaFiscalResponse],
 )
 def listar_faturamentos_mensais_contrato(
     contrato_id: int,
     competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
     status_nf: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
-    notas = listar_notas_fiscais_contrato(
+    return listar_notas_fiscais_contrato(
         contrato_id=contrato_id,
         tipo="mensal",
         competencia=competencia,
         status_nf=status_nf,
         db=db,
+        _auth=_auth,
     )
-    return [_nota_para_faturamento_response(n) for n in notas]
 
 
 @router.post(
     "/{contrato_id}/faturamentos",
-    response_model=schemas.ContratoFaturamentoMensalResponse,
+    response_model=schemas.NotaFiscalResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def criar_faturamento_mensal_contrato(
     contrato_id: int,
-    payload: schemas.ContratoFaturamentoMensalCreate,
+    payload: schemas.NotaFiscalCreate,
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
@@ -999,27 +929,29 @@ def criar_faturamento_mensal_contrato(
         contrato.nf_dinamica = "mensal"
         db.flush()
 
-    nota = criar_nota_fiscal_contrato(
+    payload_mensal = schemas.NotaFiscalCreate(
+        tipo="mensal",
+        competencia=payload.competencia,
+        status=payload.status,
+        numero=payload.numero,
+        serie=payload.serie,
+        data_emissao=payload.data_emissao,
+        data_pagamento=payload.data_pagamento,
+        valor=payload.valor,
+        observacoes=payload.observacoes,
+    )
+
+    return criar_nota_fiscal_contrato(
         contrato_id=contrato_id,
-        payload=schemas.NotaFiscalCreate(
-            tipo="mensal",
-            competencia=payload.competencia,
-            status=payload.status_nf,
-            numero=payload.numero_nf,
-            data_emissao=payload.data_emissao_nf,
-            data_pagamento=payload.data_pagamento_nf,
-            valor=payload.valor_cobrado,
-            observacoes=payload.observacoes,
-        ),
+        payload=payload_mensal,
         db=db,
         _auth=_auth,
     )
-    return _nota_para_faturamento_response(nota)
 
 
 @router.post(
     "/{contrato_id}/faturamentos/{competencia}/emitir",
-    response_model=schemas.ContratoFaturamentoMensalResponse,
+    response_model=schemas.NotaFiscalResponse,
 )
 def emitir_nota_fiscal_mensal_contrato(
     contrato_id: int,
@@ -1067,33 +999,25 @@ def emitir_nota_fiscal_mensal_contrato(
     _sincronizar_resumo_nf_contrato(db, contrato)
     db.commit()
     db.refresh(nota)
-    return _nota_para_faturamento_response(nota)
+    return nota
 
 
 @router.patch(
     "/faturamentos/{faturamento_id}",
-    response_model=schemas.ContratoFaturamentoMensalResponse,
+    response_model=schemas.NotaFiscalResponse,
 )
 def atualizar_faturamento_mensal(
     faturamento_id: int,
-    payload: schemas.ContratoFaturamentoMensalUpdate,
+    payload: schemas.NotaFiscalUpdate,
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
-    nota = atualizar_nota_fiscal(
+    return atualizar_nota_fiscal(
         nota_id=faturamento_id,
-        payload=schemas.NotaFiscalUpdate(
-            status=payload.status_nf,
-            numero=payload.numero_nf,
-            data_emissao=payload.data_emissao_nf,
-            data_pagamento=payload.data_pagamento_nf,
-            valor=payload.valor_cobrado,
-            observacoes=payload.observacoes,
-        ),
+        payload=payload,
         db=db,
         _auth=_auth,
     )
-    return _nota_para_faturamento_response(nota)
 
 
 @router.delete("/{contrato_id}", response_model=schemas.MessageResponse)

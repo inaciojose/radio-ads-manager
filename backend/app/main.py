@@ -20,7 +20,7 @@ from app.auth import (
     require_monitor_or_roles,
     validate_auth_settings,
 )
-from app.routers import arquivos, auth, clientes, contratos, usuarios, veiculacoes
+from app.routers import arquivos, auth, clientes, contratos, notas_fiscais, usuarios, veiculacoes
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -153,6 +153,7 @@ def root():
             "contratos": "/contratos",
             "veiculacoes": "/veiculacoes",
             "arquivos": "/arquivos",
+            "notas_fiscais": "/notas-fiscais",
             "auth": "/auth",
             "usuarios": "/usuarios",
         }
@@ -190,6 +191,9 @@ app.include_router(veiculacoes.router)
 
 # Registrar router de arquivos
 app.include_router(arquivos.router)
+
+# Registrar visão global de notas fiscais
+app.include_router(notas_fiscais.router)
 
 # Registrar auth
 app.include_router(auth.router)

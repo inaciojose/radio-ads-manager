@@ -47,6 +47,10 @@
           <i class="fas fa-folder-open"></i>
           <span>Arquivos</span>
         </a>
+        <a href="#notas-fiscais" class="nav-item" onclick="showPage('notas-fiscais', event)">
+          <i class="fas fa-file-invoice"></i>
+          <span>Notas Fiscais</span>
+        </a>
         <a
           href="#usuarios"
           class="nav-item"
@@ -429,6 +433,56 @@
               </button>
               <span id="usuarios-page-info" class="page-info">Página 1</span>
               <button id="usuarios-next" class="btn btn-secondary" onclick="changeUsuariosPage(1)">
+                Próxima <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notas Fiscais Page -->
+        <div id="page-notas-fiscais" class="page">
+          <div class="page-header">
+            <div class="filters">
+              <input type="month" id="filter-nf-competencia" onchange="loadNotasFiscais()" />
+              <select id="filter-nf-status" onchange="loadNotasFiscais()">
+                <option value="">Todos os Status</option>
+                <option value="pendente">Pendente</option>
+                <option value="emitida">Emitida</option>
+                <option value="paga">Paga</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+              <select id="filter-nf-cliente" onchange="loadNotasFiscais()">
+                <option value="">Todos os Clientes</option>
+              </select>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-notas-fiscais">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Contrato</th>
+                    <th>Competência</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Número NF</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="7" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <button id="notas-fiscais-prev" class="btn btn-secondary" onclick="changeNotasFiscaisPage(-1)">
+                <i class="fas fa-chevron-left"></i> Anterior
+              </button>
+              <span id="notas-fiscais-page-info" class="page-info">Página 1</span>
+              <button id="notas-fiscais-next" class="btn btn-secondary" onclick="changeNotasFiscaisPage(1)">
                 Próxima <i class="fas fa-chevron-right"></i>
               </button>
             </div>
@@ -1013,6 +1067,7 @@
     <script src="js/dashboard.js"></script>
     <script src="js/clientes.js"></script>
     <script src="js/contratos.js"></script>
+    <script src="js/notas_fiscais.js"></script>
     <script src="js/veiculacoes.js"></script>
     <script src="js/arquivos.js"></script>
     <script src="js/usuarios.js"></script>

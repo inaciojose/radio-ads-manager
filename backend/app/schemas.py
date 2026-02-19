@@ -154,70 +154,11 @@ class ContratoArquivoMetaResponse(ContratoArquivoMetaBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================
-# SCHEMAS: Faturamento Mensal de Contrato
-# ============================================
-
-class ContratoFaturamentoMensalBase(BaseModel):
-    competencia: date = Field(..., description="Primeiro dia do mes de competencia")
-    status_nf: str = Field(default="pendente")
-    numero_nf: Optional[str] = Field(None, max_length=50)
-    data_emissao_nf: Optional[date] = None
-    data_pagamento_nf: Optional[date] = None
-    valor_cobrado: Optional[float] = Field(None, ge=0)
-    observacoes: Optional[str] = None
-
-    @field_validator("competencia")
-    @classmethod
-    def validar_competencia_primeiro_dia_mes(cls, v):
-        if v.day != 1:
-            raise ValueError("competencia deve ser o primeiro dia do mes")
-        return v
-
-    @field_validator("status_nf")
-    @classmethod
-    def validar_status_nf_mensal(cls, v):
-        if v not in ["pendente", "emitida", "paga", "cancelada"]:
-            raise ValueError('Status NF mensal deve ser "pendente", "emitida", "paga" ou "cancelada"')
-        return v
-
-
-class ContratoFaturamentoMensalCreate(ContratoFaturamentoMensalBase):
-    pass
-
-
-class ContratoFaturamentoMensalUpdate(BaseModel):
-    status_nf: Optional[str] = None
-    numero_nf: Optional[str] = Field(None, max_length=50)
-    data_emissao_nf: Optional[date] = None
-    data_pagamento_nf: Optional[date] = None
-    valor_cobrado: Optional[float] = Field(None, ge=0)
-    observacoes: Optional[str] = None
-
-    @field_validator("status_nf")
-    @classmethod
-    def validar_status_nf_mensal_update(cls, v):
-        if v is None:
-            return v
-        if v not in ["pendente", "emitida", "paga", "cancelada"]:
-            raise ValueError('Status NF mensal deve ser "pendente", "emitida", "paga" ou "cancelada"')
-        return v
-
-
 class EmitirNotaFiscalMensalRequest(BaseModel):
     numero_nf: str = Field(..., min_length=1, max_length=50)
     data_emissao_nf: Optional[date] = None
     valor_cobrado: Optional[float] = Field(None, ge=0)
     observacoes: Optional[str] = None
-
-
-class ContratoFaturamentoMensalResponse(ContratoFaturamentoMensalBase):
-    id: int
-    contrato_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -294,6 +235,30 @@ class NotaFiscalResponse(NotaFiscalBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NotaFiscalListItem(BaseModel):
+    id: int
+    contrato_id: int
+    contrato_numero: str
+    cliente_id: int
+    cliente_nome: str
+    tipo: str
+    competencia: Optional[date] = None
+    status: str
+    numero: Optional[str] = None
+    data_emissao: Optional[date] = None
+    data_pagamento: Optional[date] = None
+    valor: Optional[float] = None
+    observacoes: Optional[str] = None
+    created_at: datetime
+
+
+class NotaFiscalListResponse(BaseModel):
+    items: List[NotaFiscalListItem]
+    total: int
+    skip: int
+    limit: int
 
 
 # ============================================

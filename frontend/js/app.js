@@ -157,6 +157,7 @@ function showPage(pageName, evt) {
     dashboard: "Dashboard",
     clientes: "Clientes",
     contratos: "Contratos",
+    "notas-fiscais": "Notas Fiscais",
     veiculacoes: "Veiculações",
     arquivos: "Arquivos",
     usuarios: "Usuários",
@@ -184,6 +185,9 @@ async function loadPageData(pageName) {
       break
     case "contratos":
       loadContratos()
+      break
+    case "notas-fiscais":
+      loadNotasFiscais()
       break
     case "veiculacoes":
       loadVeiculacoes()
