@@ -732,7 +732,13 @@ def test_criar_e_listar_faturamento_mensal_contrato(db):
             data_inicio=date(2026, 1, 10),
             data_fim=None,
             valor_total=1200,
-            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=10)],
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=10,
+                    quantidade_diaria_meta=1,
+                )
+            ],
         ),
         db=db,
     )
@@ -773,7 +779,13 @@ def test_emitir_nf_mensal_cria_on_demand(db):
             data_inicio=date(2026, 1, 1),
             data_fim=None,
             valor_total=2200,
-            itens=[schemas.ContratoItemCreate(tipo_programa="jornal", quantidade_contratada=20)],
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="jornal",
+                    quantidade_contratada=20,
+                    quantidade_diaria_meta=1,
+                )
+            ],
         ),
         db=db,
     )
@@ -806,7 +818,13 @@ def test_competencia_invalida_retorna_400(db):
             data_inicio=date(2026, 1, 1),
             data_fim=None,
             valor_total=1500,
-            itens=[schemas.ContratoItemCreate(tipo_programa="esporte", quantidade_contratada=15)],
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="esporte",
+                    quantidade_contratada=15,
+                    quantidade_diaria_meta=1,
+                )
+            ],
         ),
         db=db,
     )
@@ -819,3 +837,190 @@ def test_competencia_invalida_retorna_400(db):
             db=db,
         )
     assert excinfo.value.status_code == 400
+
+
+def test_criar_nota_fiscal_unica_sincroniza_resumo_contrato(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente NF Unica",
+            cnpj_cpf="31.313.131/0001-31",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=date(2026, 2, 1),
+            nf_dinamica="unica",
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=10,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    nota = contratos_router.criar_nota_fiscal_contrato(
+        contrato_id=contrato.id,
+        payload=schemas.NotaFiscalCreate(
+            tipo="unica",
+            status="emitida",
+            numero="NF-UNICA-001",
+            data_emissao=date(2026, 1, 20),
+            valor=1000,
+        ),
+        db=db,
+    )
+    assert nota.tipo == "unica"
+    assert nota.status == "emitida"
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.status_nf == "emitida"
+    assert contrato_atualizado.numero_nf == "NF-UNICA-001"
+    assert contrato_atualizado.data_emissao_nf == date(2026, 1, 20)
+
+
+def test_criar_nota_mensal_em_contrato_unico_retorna_400(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente NF Erro Tipo",
+            cnpj_cpf="32.323.232/0001-32",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 1, 1),
+            data_fim=date(2026, 2, 1),
+            nf_dinamica="unica",
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="jornal",
+                    quantidade_contratada=5,
+                )
+            ],
+        ),
+        db=db,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        contratos_router.criar_nota_fiscal_contrato(
+            contrato_id=contrato.id,
+            payload=schemas.NotaFiscalCreate(
+                tipo="mensal",
+                competencia=date(2026, 1, 1),
+                status="pendente",
+            ),
+            db=db,
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_contrato_fechado_exige_meta_total(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Fechado",
+            cnpj_cpf="40.404.040/0001-40",
+        ),
+        db=db,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        contratos_router.criar_contrato(
+            schemas.ContratoCreate(
+                cliente_id=cliente.id,
+                data_inicio=date(2026, 1, 1),
+                data_fim=date(2026, 2, 1),
+                valor_total=1000,
+                itens=[
+                    schemas.ContratoItemCreate(
+                        tipo_programa="musical",
+                        quantidade_diaria_meta=2,
+                    )
+                ],
+            ),
+            db=db,
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_contrato_recorrente_exige_meta_diaria(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Recorrente",
+            cnpj_cpf="50.505.050/0001-50",
+        ),
+        db=db,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        contratos_router.criar_contrato(
+            schemas.ContratoCreate(
+                cliente_id=cliente.id,
+                data_inicio=date(2026, 1, 1),
+                data_fim=None,
+                valor_total=1000,
+                itens=[
+                    schemas.ContratoItemCreate(
+                        tipo_programa="jornal",
+                        quantidade_contratada=10,
+                    )
+                ],
+            ),
+            db=db,
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_processamento_sem_tipo_programa_em_item_unico_contabiliza(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Sem Tipo",
+            cnpj_cpf="60.606.060/0001-60",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            valor_total=900,
+            itens=[
+                schemas.ContratoItemCreate(
+                    tipo_programa="musical",
+                    quantidade_contratada=10,
+                )
+            ],
+        ),
+        db=db,
+    )
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="spot_sem_tipo.mp3",
+        titulo="Spot sem tipo",
+    )
+    db.add(arquivo)
+    db.flush()
+    db.add(models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime.now(),
+        tipo_programa=None,
+        fonte="obs_manual",
+        processado=False,
+    ))
+    db.commit()
+
+    resp = veiculacoes_router.processar_veiculacoes(
+        data_inicio=date.today(),
+        data_fim=date.today(),
+        db=db,
+    )
+    assert resp["success"] is True
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.itens[0].quantidade_executada == 1

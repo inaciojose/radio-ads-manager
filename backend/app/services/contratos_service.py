@@ -32,6 +32,7 @@ def criar_contrato_com_itens(
             frequencia=contrato.frequencia,
             valor_total=contrato.valor_total,
             status_contrato=contrato.status_contrato,
+            nf_dinamica=contrato.nf_dinamica,
             status_nf=contrato.status_nf,
             numero_nf=contrato.numero_nf,
             data_emissao_nf=contrato.data_emissao_nf,

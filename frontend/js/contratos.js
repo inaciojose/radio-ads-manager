@@ -5,6 +5,7 @@
 let contratosCache = []
 const clientesPorIdCache = {}
 const faturamentoResumoPorContrato = {}
+const monitoramentoResumoPorContrato = {}
 
 const contratosState = {
   page: 1,
@@ -52,6 +53,7 @@ async function loadContratos(page = 1) {
     contratosState.hasNext = contratos.length === contratosState.pageSize
 
     await hydrateClientesNomes(contratos)
+    await hydrateMonitoramentoResumo(contratos)
     await hydrateFaturamentoMensalResumo(contratos)
     renderContratos(contratos, clientesPorIdCache)
     updateContratosPagination()
@@ -62,6 +64,51 @@ async function loadContratos(page = 1) {
   }
 }
 
+async function hydrateMonitoramentoResumo(contratos) {
+  const ids = [...new Set(contratos.map((c) => c.id))].filter(Boolean)
+  if (!ids.length) return
+
+  const resultados = await Promise.all(
+    ids.map(async (contratoId) => {
+      try {
+        const resumo = await api.getContratoResumoMonitoramento(contratoId)
+        return { contratoId, resumo }
+      } catch {
+        return { contratoId, resumo: null }
+      }
+    }),
+  )
+
+  for (const item of resultados) {
+    monitoramentoResumoPorContrato[item.contratoId] = item.resumo
+  }
+}
+
+function getProgressStack(resumo) {
+  const totalMeta = resumo?.total?.meta || 0
+  const totalExecutadas = resumo?.total?.executadas || 0
+  const diariaMeta = resumo?.diario?.meta || 0
+  const diariaExecutadas = resumo?.diario?.executadas || 0
+  const blocos = []
+
+  if (totalMeta > 0) {
+    blocos.push(`<div>${getProgressBar(totalExecutadas, totalMeta)}</div>`)
+  }
+  if (diariaMeta > 0) {
+    blocos.push(
+      `<div class="contrato-progress-diario">
+         <small>Hoje: ${diariaExecutadas}/${diariaMeta} (${(resumo.diario?.percentual || 0).toFixed(1)}%)</small>
+       </div>`,
+    )
+  }
+
+  if (!blocos.length) {
+    return '<small class="text-muted">Sem metas definidas</small>'
+  }
+
+  return blocos.join("")
+}
+
 function getCompetenciaAtual() {
   const now = new Date()
   const mes = String(now.getMonth() + 1).padStart(2, "0")
@@ -70,7 +117,11 @@ function getCompetenciaAtual() {
 
 async function hydrateFaturamentoMensalResumo(contratos) {
   const competenciaAtual = getCompetenciaAtual()
-  const ids = [...new Set(contratos.map((c) => c.id))].filter(Boolean)
+  const ids = [...new Set(
+    contratos
+      .filter((c) => c.nf_dinamica === "mensal")
+      .map((c) => c.id),
+  )].filter(Boolean)
   if (!ids.length) return
 
   const pendentes = ids.filter(
@@ -126,24 +177,17 @@ function renderContratos(items, clientesPorId) {
       const resumoMensal = faturamentoResumoPorContrato[c.id]
       const faturamentoAtual = resumoMensal?.atual || null
       const competenciaAtual = getCompetenciaAtual()
-      const resumoMensalHtml = faturamentoAtual
+      const resumoMensalHtml = c.nf_dinamica === "mensal" && faturamentoAtual
         ? `<div class="contrato-nf-mensal">
              <small>Mês ${competenciaAtual}: ${getStatusBadge(faturamentoAtual.status_nf, "nf")}</small>
            </div>`
-        : !c.data_fim
+        : c.nf_dinamica === "mensal"
           ? `<div class="contrato-nf-mensal">
                <small>Mês ${competenciaAtual}: <span class="badge badge-secondary">Sem lançamento</span></small>
              </div>`
           : ""
 
-      const metas = c.arquivos_metas || []
-      const usaMetas = metas.length > 0
-      const totalContratado = usaMetas
-        ? metas.reduce((acc, m) => acc + (m.quantidade_meta || 0), 0)
-        : (c.itens || []).reduce((acc, i) => acc + (i.quantidade_contratada || 0), 0)
-      const totalExecutado = usaMetas
-        ? metas.reduce((acc, m) => acc + (m.quantidade_executada || 0), 0)
-        : (c.itens || []).reduce((acc, i) => acc + (i.quantidade_executada || 0), 0)
+      const monitoramentoResumo = monitoramentoResumoPorContrato[c.id]
 
       return `
       <tr>
@@ -153,16 +197,23 @@ function renderContratos(items, clientesPorId) {
           ${formatDate(c.data_inicio)} a ${c.data_fim ? formatDate(c.data_fim) : "Sem prazo"}
           ${!c.data_fim ? '<div><span class="badge badge-info">Recorrente</span></div>' : ""}
         </td>
-        <td>${getProgressBar(totalExecutado, totalContratado)}</td>
+        <td>${getProgressStack(monitoramentoResumo)}</td>
         <td>${formatCurrency(c.valor_total)}</td>
-        <td>${getStatusBadge(c.status_nf, "nf")}${resumoMensalHtml}</td>
+        <td>
+          ${getStatusBadge(c.status_nf, "nf")}
+          <div><small>Dinâmica: ${c.nf_dinamica === "mensal" ? "Mensal" : "Única"}</small></div>
+          ${resumoMensalHtml}
+        </td>
         <td>${getStatusBadge(c.status_contrato, "contrato")}</td>
         <td>
           ${
             canWrite()
               ? `<button class="btn btn-sm btn-secondary" onclick="showContratoModal(${c.id})">Editar</button>
-                 <button class="btn btn-sm btn-warning" onclick="showFaturamentoMensalModal(${c.id})">Mensal</button>
-                 <button class="btn btn-sm btn-primary" onclick="showNotaFiscalModal(${c.id})">NF</button>
+                 ${
+                   c.nf_dinamica === "mensal"
+                     ? `<button class="btn btn-sm btn-warning" onclick="showFaturamentoMensalModal(${c.id})">NFs</button>`
+                     : `<button class="btn btn-sm btn-primary" onclick="showNotaFiscalModal(${c.id})">NF</button>`
+                 }
                  <button class="btn btn-sm btn-danger" onclick="removerContrato(${c.id})">Excluir</button>`
               : '<span class="badge badge-secondary">Somente leitura</span>'
           }
@@ -508,6 +559,7 @@ async function showContratoModal(contratoId = null) {
   document.getElementById("contrato-data-inicio").value = contrato?.data_inicio || ""
   document.getElementById("contrato-data-fim").value = contrato?.data_fim || ""
   document.getElementById("contrato-frequencia").value = contrato?.frequencia || "ambas"
+  document.getElementById("contrato-nf-dinamica").value = contrato?.nf_dinamica || "unica"
   document.getElementById("contrato-valor-total").value = contrato?.valor_total ?? ""
   document.getElementById("contrato-status-contrato").value =
     contrato?.status_contrato || "ativo"
@@ -533,6 +585,7 @@ async function saveContrato() {
   const clienteId = Number(document.getElementById("contrato-cliente").value)
   const dataInicio = document.getElementById("contrato-data-inicio").value
   const dataFim = document.getElementById("contrato-data-fim").value
+  const contratoFechado = Boolean(dataFim)
 
   if (!isEdit && !clienteId) {
     showToast("Selecione o cliente", "warning")
@@ -551,6 +604,7 @@ async function saveContrato() {
     data_inicio: dataInicio,
     data_fim: dataFim || null,
     frequencia: document.getElementById("contrato-frequencia").value,
+    nf_dinamica: document.getElementById("contrato-nf-dinamica").value,
     valor_total:
       document.getElementById("contrato-valor-total").value === ""
         ? null
@@ -566,9 +620,8 @@ async function saveContrato() {
   try {
     showLoading()
     if (isEdit) {
-      await api.updateContrato(id, basePayload)
-
       const itemRows = Array.from(document.querySelectorAll(".contrato-item-edit-row"))
+      const itensPayload = []
       for (const row of itemRows) {
         const itemId = row.dataset.itemId
         const tipoPrograma = row.querySelector(".contrato-item-tipo")?.value.trim()
@@ -586,13 +639,31 @@ async function saveContrato() {
         if (quantidade === null && metaDiaria === null) {
           throw new Error("Cada item precisa de meta total, diária ou ambas")
         }
+        if (contratoFechado && quantidade === null) {
+          throw new Error("Contrato com data fim exige meta total em todos os itens")
+        }
+        if (!contratoFechado && metaDiaria === null) {
+          throw new Error("Contrato sem data fim exige meta diária em todos os itens")
+        }
 
-        await api.updateContratoItem(id, itemId, {
+        itensPayload.push({
+          itemId,
           tipo_programa: tipoPrograma,
           quantidade_contratada: quantidade,
           quantidade_diaria_meta: metaDiaria,
           observacoes:
             row.querySelector(".contrato-item-observacoes")?.value.trim() || null,
+        })
+      }
+
+      await api.updateContrato(id, basePayload)
+
+      for (const item of itensPayload) {
+        await api.updateContratoItem(id, item.itemId, {
+          tipo_programa: item.tipo_programa,
+          quantidade_contratada: item.quantidade_contratada,
+          quantidade_diaria_meta: item.quantidade_diaria_meta,
+          observacoes: item.observacoes,
         })
       }
 
@@ -663,6 +734,14 @@ async function saveContrato() {
         showToast("Informe meta total, diária ou ambas no item", "warning")
         return
       }
+      if (contratoFechado && itemQuantidade === null) {
+        showToast("Contrato com data fim exige meta total", "warning")
+        return
+      }
+      if (!contratoFechado && itemMetaDiaria === null) {
+        showToast("Contrato sem data fim exige meta diária", "warning")
+        return
+      }
 
       await api.createContrato({
         cliente_id: clienteId,
@@ -721,38 +800,72 @@ async function saveContrato() {
   }
 }
 
-function showNotaFiscalModal(id) {
+async function showNotaFiscalModal(id) {
   if (!requireWriteAccess()) return
-  const contrato = contratosCache.find((c) => c.id === Number(id))
+  const contrato = contratosCache.find((c) => c.id === Number(id)) || (await api.getContrato(id))
   if (!contrato) return
+  if (contrato.nf_dinamica === "mensal") {
+    await showFaturamentoMensalModal(contrato.id)
+    return
+  }
+
+  const notas = await api.getContratoNotasFiscais(contrato.id, { tipo: "unica" })
+  const nota = Array.isArray(notas) && notas.length ? notas[0] : null
 
   document.getElementById("nf-contrato-id").value = contrato.id
-  document.getElementById("nf-status").value = contrato.status_nf || "pendente"
-  document.getElementById("nf-numero").value = contrato.numero_nf || ""
-  document.getElementById("nf-data-emissao").value = contrato.data_emissao_nf || ""
+  document.getElementById("nf-nota-id").value = nota?.id || ""
+  document.getElementById("nf-status").value = nota?.status || contrato.status_nf || "pendente"
+  document.getElementById("nf-numero").value = nota?.numero || contrato.numero_nf || ""
+  document.getElementById("nf-serie").value = nota?.serie || ""
+  document.getElementById("nf-data-emissao").value = nota?.data_emissao || contrato.data_emissao_nf || ""
+  document.getElementById("nf-data-pagamento").value = nota?.data_pagamento || ""
+  document.getElementById("nf-valor").value = nota?.valor ?? ""
+  document.getElementById("nf-observacoes").value = nota?.observacoes || ""
 
   openModal("modal-nota-fiscal")
 }
 
 async function saveNotaFiscal() {
   if (!requireWriteAccess()) return
-  const id = document.getElementById("nf-contrato-id").value
+  const contratoId = Number(document.getElementById("nf-contrato-id").value)
+  const notaId = Number(document.getElementById("nf-nota-id").value || 0)
   const status = document.getElementById("nf-status").value
   const numero = document.getElementById("nf-numero").value.trim()
+  const serie = document.getElementById("nf-serie").value.trim()
   const dataEmissao = document.getElementById("nf-data-emissao").value
+  const dataPagamento = document.getElementById("nf-data-pagamento").value
+  const valorRaw = document.getElementById("nf-valor").value
+  const observacoes = document.getElementById("nf-observacoes").value.trim()
 
   try {
     showLoading()
-    await api.updateNotaFiscal(id, {
-      status_nf: status,
-      ...(numero ? { numero_nf: numero } : {}),
-      ...(dataEmissao ? { data_emissao: dataEmissao } : {}),
-    })
+    if (notaId) {
+      await api.updateNotaFiscalRegistro(notaId, {
+        status,
+        numero: numero || null,
+        serie: serie || null,
+        data_emissao: dataEmissao || null,
+        data_pagamento: dataPagamento || null,
+        valor: valorRaw === "" ? null : Number(valorRaw),
+        observacoes: observacoes || null,
+      })
+    } else {
+      await api.createContratoNotaFiscal(contratoId, {
+        tipo: "unica",
+        status,
+        numero: numero || null,
+        serie: serie || null,
+        data_emissao: dataEmissao || null,
+        data_pagamento: dataPagamento || null,
+        valor: valorRaw === "" ? null : Number(valorRaw),
+        observacoes: observacoes || null,
+      })
+    }
     closeModal()
-    showToast("Nota fiscal atualizada", "success")
+    showToast("Nota fiscal salva", "success")
     await loadContratos(contratosState.page)
   } catch (error) {
-    showToast(error.message || "Erro ao atualizar nota fiscal", "error")
+    showToast(error.message || "Erro ao salvar nota fiscal", "error")
   } finally {
     hideLoading()
   }
@@ -824,6 +937,10 @@ async function showFaturamentoMensalModal(contratoId) {
     showToast("Contrato não encontrado", "error")
     return
   }
+  if (contrato.nf_dinamica !== "mensal") {
+    showToast("Este contrato usa NF única. Altere a dinâmica para mensal para usar histórico.", "warning")
+    return
+  }
 
   faturamentoMensalState.contratoId = contrato.id
   faturamentoMensalState.contratoNumero = contrato.numero_contrato || `#${contrato.id}`
@@ -891,6 +1008,7 @@ function renderFaturamentosMensais(items) {
         </td>
         <td>
           <button class="btn btn-sm btn-secondary" onclick="salvarFaturamentoMensal(${f.id})">Salvar</button>
+          <button class="btn btn-sm btn-danger" onclick="excluirFaturamentoMensal(${f.id})">Excluir</button>
         </td>
       </tr>
     `,
@@ -990,6 +1108,22 @@ async function salvarFaturamentoMensal(faturamentoId) {
     await loadFaturamentosMensais()
   } catch (error) {
     showToast(error.message || "Erro ao atualizar faturamento mensal", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+async function excluirFaturamentoMensal(faturamentoId) {
+  if (!requireWriteAccess()) return
+  if (!confirmAction("Deseja excluir esta nota fiscal mensal?")) return
+  try {
+    showLoading()
+    await api.deleteNotaFiscalRegistro(faturamentoId)
+    showToast("Nota fiscal removida", "success")
+    await loadFaturamentosMensais()
+    await loadContratos(contratosState.page)
+  } catch (error) {
+    showToast(error.message || "Erro ao remover nota fiscal", "error")
   } finally {
     hideLoading()
   }

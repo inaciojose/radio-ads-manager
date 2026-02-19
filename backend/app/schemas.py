@@ -221,6 +221,82 @@ class ContratoFaturamentoMensalResponse(ContratoFaturamentoMensalBase):
 
 
 # ============================================
+# SCHEMAS: Nota Fiscal
+# ============================================
+
+class NotaFiscalBase(BaseModel):
+    tipo: str = Field(default="unica", description="unica ou mensal")
+    competencia: Optional[date] = Field(
+        None,
+        description="Primeiro dia do mes quando tipo mensal",
+    )
+    status: str = Field(default="pendente")
+    numero: Optional[str] = Field(None, max_length=50)
+    serie: Optional[str] = Field(None, max_length=20)
+    data_emissao: Optional[date] = None
+    data_pagamento: Optional[date] = None
+    valor: Optional[float] = Field(None, ge=0)
+    observacoes: Optional[str] = None
+
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo_nf(cls, v):
+        if v not in ["unica", "mensal"]:
+            raise ValueError('tipo deve ser "unica" ou "mensal"')
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validar_status_nf_crud(cls, v):
+        if v not in ["pendente", "emitida", "paga", "cancelada"]:
+            raise ValueError('status deve ser "pendente", "emitida", "paga" ou "cancelada"')
+        return v
+
+    @model_validator(mode="after")
+    def validar_competencia_por_tipo(self):
+        if self.tipo == "mensal":
+            if self.competencia is None:
+                raise ValueError("competencia e obrigatoria para notas mensais")
+            if self.competencia.day != 1:
+                raise ValueError("competencia deve ser o primeiro dia do mes")
+        elif self.competencia is not None:
+            raise ValueError("competencia deve ser nula para notas unicas")
+        return self
+
+
+class NotaFiscalCreate(NotaFiscalBase):
+    pass
+
+
+class NotaFiscalUpdate(BaseModel):
+    status: Optional[str] = None
+    numero: Optional[str] = Field(None, max_length=50)
+    serie: Optional[str] = Field(None, max_length=20)
+    data_emissao: Optional[date] = None
+    data_pagamento: Optional[date] = None
+    valor: Optional[float] = Field(None, ge=0)
+    observacoes: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validar_status_nf_update(cls, v):
+        if v is None:
+            return v
+        if v not in ["pendente", "emitida", "paga", "cancelada"]:
+            raise ValueError('status deve ser "pendente", "emitida", "paga" ou "cancelada"')
+        return v
+
+
+class NotaFiscalResponse(NotaFiscalBase):
+    id: int
+    contrato_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
 # SCHEMAS: Contrato
 # ============================================
 
@@ -232,6 +308,7 @@ class ContratoBase(BaseModel):
     frequencia: str = Field(default="ambas", description="Frequência: 102.7, 104.7 ou ambas")
     valor_total: Optional[float] = Field(None, ge=0, description="Valor total do contrato")
     status_contrato: str = Field(default="ativo")
+    nf_dinamica: str = Field(default="unica", description="unica ou mensal")
     status_nf: str = Field(default="pendente")
     numero_nf: Optional[str] = None
     data_emissao_nf: Optional[date] = None
@@ -249,6 +326,13 @@ class ContratoBase(BaseModel):
     def validar_status_nf(cls, v):
         if v not in ['pendente', 'emitida', 'paga']:
             raise ValueError('Status NF inválido')
+        return v
+
+    @field_validator("nf_dinamica")
+    @classmethod
+    def validar_nf_dinamica(cls, v):
+        if v not in ["unica", "mensal"]:
+            raise ValueError('nf_dinamica deve ser "unica" ou "mensal"')
         return v
 
     @field_validator("frequencia")
@@ -281,6 +365,7 @@ class ContratoUpdate(BaseModel):
     frequencia: Optional[str] = None
     valor_total: Optional[float] = None
     status_contrato: Optional[str] = None
+    nf_dinamica: Optional[str] = None
     status_nf: Optional[str] = None
     numero_nf: Optional[str] = None
     data_emissao_nf: Optional[date] = None
@@ -295,6 +380,15 @@ class ContratoUpdate(BaseModel):
             raise ValueError('Frequência deve ser "102.7", "104.7" ou "ambas"')
         return v
 
+    @field_validator("nf_dinamica")
+    @classmethod
+    def validar_nf_dinamica_update(cls, v):
+        if v is None:
+            return v
+        if v not in ["unica", "mensal"]:
+            raise ValueError('nf_dinamica deve ser "unica" ou "mensal"')
+        return v
+
 
 class ContratoResponse(ContratoBase):
     """Schema para retornar contrato"""
@@ -304,6 +398,7 @@ class ContratoResponse(ContratoBase):
     updated_at: Optional[datetime] = None
     itens: List[ContratoItemResponse] = []
     arquivos_metas: List[ContratoArquivoMetaResponse] = []
+    notas_fiscais: List[NotaFiscalResponse] = []
     
     model_config = ConfigDict(from_attributes=True)
 

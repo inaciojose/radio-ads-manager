@@ -562,22 +562,32 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>Status NF</label>
-                <select id="contrato-status-nf">
-                  <option value="pendente">Pendente</option>
-                  <option value="emitida">Emitida</option>
-                  <option value="paga">Paga</option>
+                <label>Dinâmica NF</label>
+                <select id="contrato-nf-dinamica">
+                  <option value="unica">Única</option>
+                  <option value="mensal">Mensal</option>
                 </select>
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label>Número NF</label>
-                <input type="text" id="contrato-numero-nf" />
+                <label>Status NF (Resumo)</label>
+                <select id="contrato-status-nf">
+                  <option value="pendente">Pendente</option>
+                  <option value="emitida">Emitida</option>
+                  <option value="paga">Paga</option>
+                </select>
               </div>
               <div class="form-group">
-                <label>Data Emissão NF</label>
+                <label>Número NF (Resumo)</label>
+                <input type="text" id="contrato-numero-nf" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Data Emissão NF (Resumo)</label>
                 <input type="date" id="contrato-data-emissao-nf" />
               </div>
             </div>
@@ -654,12 +664,14 @@
         <div class="modal-body">
           <form id="form-nota-fiscal">
             <input type="hidden" id="nf-contrato-id" />
+            <input type="hidden" id="nf-nota-id" />
             <div class="form-group">
               <label>Status NF *</label>
               <select id="nf-status" required>
                 <option value="pendente">Pendente</option>
                 <option value="emitida">Emitida</option>
                 <option value="paga">Paga</option>
+                <option value="cancelada">Cancelada</option>
               </select>
             </div>
             <div class="form-group">
@@ -667,8 +679,24 @@
               <input type="text" id="nf-numero" />
             </div>
             <div class="form-group">
+              <label>Série</label>
+              <input type="text" id="nf-serie" />
+            </div>
+            <div class="form-group">
               <label>Data Emissão</label>
               <input type="date" id="nf-data-emissao" />
+            </div>
+            <div class="form-group">
+              <label>Data Pagamento</label>
+              <input type="date" id="nf-data-pagamento" />
+            </div>
+            <div class="form-group">
+              <label>Valor (R$)</label>
+              <input type="number" step="0.01" min="0" id="nf-valor" />
+            </div>
+            <div class="form-group">
+              <label>Observações</label>
+              <textarea id="nf-observacoes" rows="2"></textarea>
             </div>
           </form>
         </div>

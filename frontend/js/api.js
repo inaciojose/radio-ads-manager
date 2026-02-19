@@ -236,17 +236,36 @@ class API {
   }
 
   async getContratoFaturamentosMensais(contratoId, params = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request(
-      `/contratos/${contratoId}/faturamentos${query ? "?" + query : ""}`,
-    )
+    const notas = await this.getContratoNotasFiscais(contratoId, { ...params, tipo: "mensal" })
+    return (notas || []).map((n) => ({
+      ...n,
+      status_nf: n.status,
+      numero_nf: n.numero,
+      data_emissao_nf: n.data_emissao,
+      data_pagamento_nf: n.data_pagamento,
+      valor_cobrado: n.valor,
+    }))
   }
 
   async createContratoFaturamentoMensal(contratoId, data) {
-    return this.request(`/contratos/${contratoId}/faturamentos`, {
-      method: "POST",
-      body: JSON.stringify(data),
+    const nota = await this.createContratoNotaFiscal(contratoId, {
+      tipo: "mensal",
+      competencia: data.competencia,
+      status: data.status_nf,
+      numero: data.numero_nf,
+      data_emissao: data.data_emissao_nf,
+      data_pagamento: data.data_pagamento_nf,
+      valor: data.valor_cobrado,
+      observacoes: data.observacoes,
     })
+    return {
+      ...nota,
+      status_nf: nota.status,
+      numero_nf: nota.numero,
+      data_emissao_nf: nota.data_emissao,
+      data_pagamento_nf: nota.data_pagamento,
+      valor_cobrado: nota.valor,
+    }
   }
 
   async emitirNotaFiscalMensal(contratoId, competencia, data) {
@@ -257,16 +276,55 @@ class API {
   }
 
   async updateFaturamentoMensal(faturamentoId, data) {
-    return this.request(`/contratos/faturamentos/${faturamentoId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
+    const nota = await this.updateNotaFiscalRegistro(faturamentoId, {
+      status: data.status_nf,
+      numero: data.numero_nf,
+      data_emissao: data.data_emissao_nf,
+      data_pagamento: data.data_pagamento_nf,
+      valor: data.valor_cobrado,
+      observacoes: data.observacoes,
     })
+    return {
+      ...nota,
+      status_nf: nota.status,
+      numero_nf: nota.numero,
+      data_emissao_nf: nota.data_emissao,
+      data_pagamento_nf: nota.data_pagamento,
+      valor_cobrado: nota.valor,
+    }
   }
 
   async updateNotaFiscal(id, params) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/contratos/${id}/nota-fiscal?${query}`, {
       method: "PATCH",
+    })
+  }
+
+  async getContratoNotasFiscais(contratoId, params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(
+      `/contratos/${contratoId}/notas-fiscais${query ? "?" + query : ""}`,
+    )
+  }
+
+  async createContratoNotaFiscal(contratoId, data) {
+    return this.request(`/contratos/${contratoId}/notas-fiscais`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateNotaFiscalRegistro(notaId, data) {
+    return this.request(`/contratos/notas-fiscais/${notaId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteNotaFiscalRegistro(notaId) {
+    return this.request(`/contratos/notas-fiscais/${notaId}`, {
+      method: "DELETE",
     })
   }
 
@@ -286,6 +344,13 @@ class API {
 
   async getContratosCliente(clienteId) {
     return this.request(`/contratos/cliente/${clienteId}/resumo`)
+  }
+
+  async getContratoResumoMonitoramento(contratoId, params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(
+      `/contratos/${contratoId}/resumo/monitoramento${query ? "?" + query : ""}`,
+    )
   }
 
   // ============================================

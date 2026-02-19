@@ -646,6 +646,14 @@ body {
   color: var(--gray);
 }
 
+.contrato-progress-diario {
+  margin-top: 0.4rem;
+}
+
+.contrato-progress-diario small {
+  color: var(--gray);
+}
+
 .faturamento-mensal-actions {
   display: flex;
   gap: 0.5rem;

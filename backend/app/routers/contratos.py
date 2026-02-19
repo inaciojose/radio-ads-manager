@@ -17,6 +17,7 @@ from app.services.contratos_service import (
     NumeroContratoConflictError,
     criar_contrato_com_itens,
 )
+from app.services.veiculacoes_service import resolver_item_contrato_para_veiculacao
 
 
 router = APIRouter(
@@ -64,6 +65,84 @@ def _validar_competencia_no_periodo_contrato(
             )
 
 
+def _normalizar_status_nota_para_contrato(status_nota: str) -> str:
+    if status_nota == "paga":
+        return "paga"
+    if status_nota == "emitida":
+        return "emitida"
+    return "pendente"
+
+
+def _sincronizar_resumo_nf_contrato(db: Session, contrato: models.Contrato) -> None:
+    notas = (
+        db.query(models.NotaFiscal)
+        .filter(models.NotaFiscal.contrato_id == contrato.id)
+        .order_by(models.NotaFiscal.created_at.desc(), models.NotaFiscal.id.desc())
+        .all()
+    )
+
+    if not notas:
+        contrato.status_nf = "pendente"
+        contrato.numero_nf = None
+        contrato.data_emissao_nf = None
+        return
+
+    if contrato.nf_dinamica == "unica":
+        nota_unica = next((n for n in notas if n.tipo == "unica"), None)
+        if not nota_unica:
+            contrato.status_nf = "pendente"
+            contrato.numero_nf = None
+            contrato.data_emissao_nf = None
+            return
+        contrato.status_nf = _normalizar_status_nota_para_contrato(nota_unica.status)
+        contrato.numero_nf = nota_unica.numero
+        contrato.data_emissao_nf = nota_unica.data_emissao
+        return
+
+    statuses = [n.status for n in notas if n.tipo == "mensal"]
+    if not statuses:
+        contrato.status_nf = "pendente"
+        contrato.numero_nf = None
+        contrato.data_emissao_nf = None
+        return
+    if all(s == "paga" for s in statuses):
+        contrato.status_nf = "paga"
+    elif any(s in {"emitida", "paga"} for s in statuses):
+        contrato.status_nf = "emitida"
+    else:
+        contrato.status_nf = "pendente"
+
+    nota_ref = next((n for n in notas if n.tipo == "mensal" and n.numero), None)
+    contrato.numero_nf = nota_ref.numero if nota_ref else None
+    contrato.data_emissao_nf = nota_ref.data_emissao if nota_ref else None
+
+
+def _validar_tipo_nota_para_contrato(contrato: models.Contrato, tipo_nota: str) -> None:
+    if contrato.nf_dinamica != tipo_nota:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Contrato com nf_dinamica '{contrato.nf_dinamica}' aceita apenas notas do tipo '{contrato.nf_dinamica}'.",
+        )
+
+
+def _nota_para_faturamento_response(
+    nota: models.NotaFiscal,
+) -> schemas.ContratoFaturamentoMensalResponse:
+    return schemas.ContratoFaturamentoMensalResponse(
+        id=nota.id,
+        contrato_id=nota.contrato_id,
+        competencia=nota.competencia,
+        status_nf=nota.status,
+        numero_nf=nota.numero,
+        data_emissao_nf=nota.data_emissao,
+        data_pagamento_nf=nota.data_pagamento,
+        valor_cobrado=nota.valor,
+        observacoes=nota.observacoes,
+        created_at=nota.created_at,
+        updated_at=nota.updated_at,
+    )
+
+
 def _validar_arquivo_do_cliente(db: Session, cliente_id: int, arquivo_audio_id: int):
     arquivo = db.query(models.ArquivoAudio).filter(
         models.ArquivoAudio.id == arquivo_audio_id
@@ -78,6 +157,42 @@ def _validar_arquivo_do_cliente(db: Session, cliente_id: int, arquivo_audio_id: 
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Arquivo {arquivo_audio_id} nao pertence ao cliente do contrato",
         )
+
+
+def _validar_regras_itens_por_tipo_contrato(
+    data_fim: Optional[date],
+    itens: list,
+) -> None:
+    if not itens:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contrato precisa ter pelo menos um item.",
+        )
+
+    if data_fim:
+        if not any((item.quantidade_contratada or 0) > 0 for item in itens):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Contrato com data fim exige meta total (quantidade_contratada).",
+            )
+    else:
+        if not any((item.quantidade_diaria_meta or 0) > 0 for item in itens):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Contrato sem data fim exige meta diaria (quantidade_diaria_meta).",
+            )
+
+
+def _resolver_item_em_lista(itens: list, tipo_programa: Optional[str]):
+    if not itens:
+        return None
+    if tipo_programa:
+        item = next((i for i in itens if i.tipo_programa == tipo_programa), None)
+        if item:
+            return item
+    if len(itens) == 1:
+        return itens[0]
+    return itens[0]
 
 
 @router.get("/", response_model=List[schemas.ContratoResponse])
@@ -126,7 +241,11 @@ def estatisticas_contratos(db: Session = Depends(get_db)):
 
     total_contratos = db.query(models.Contrato).count()
     contratos_ativos = db.query(models.Contrato).filter(models.Contrato.status_contrato == "ativo").count()
-    notas_fiscais_pendentes = db.query(models.Contrato).filter(models.Contrato.status_nf == "pendente").count()
+    notas_fiscais_pendentes = (
+        db.query(models.NotaFiscal)
+        .filter(models.NotaFiscal.status == "pendente")
+        .count()
+    )
     vencendo_30_dias = (
         db.query(models.Contrato)
         .filter(
@@ -204,15 +323,8 @@ def resumo_meta_diaria_hoje(db: Session = Depends(get_db)):
         if (veiculacao.contrato_id, veiculacao.arquivo_audio_id) in pares_meta_arquivo:
             continue
 
-        item_contabilizado = None
         itens_contrato = itens_por_contrato.get(veiculacao.contrato_id, [])
-        if veiculacao.tipo_programa:
-            item_contabilizado = next(
-                (i for i in itens_contrato if i.tipo_programa == veiculacao.tipo_programa),
-                None,
-            )
-            if not item_contabilizado and itens_contrato:
-                item_contabilizado = itens_contrato[0]
+        item_contabilizado = _resolver_item_em_lista(itens_contrato, veiculacao.tipo_programa)
 
         if item_contabilizado and (item_contabilizado.quantidade_diaria_meta or 0) > 0:
             executadas_hoje += 1
@@ -226,6 +338,84 @@ def resumo_meta_diaria_hoje(db: Session = Depends(get_db)):
         "meta_diaria_total": meta_diaria_total,
         "executadas_hoje": executadas_hoje,
         "percentual_cumprimento": percentual,
+    }
+
+
+@router.get("/{contrato_id}/resumo/monitoramento")
+def resumo_monitoramento_contrato(
+    contrato_id: int,
+    data_ref: Optional[date] = Query(None, description="Data de referencia (padrao: hoje)"),
+    db: Session = Depends(get_db),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    if not data_ref:
+        data_ref = date.today()
+
+    inicio_dia = datetime.combine(data_ref, datetime.min.time())
+    fim_dia = datetime.combine(data_ref, datetime.max.time())
+
+    metas_arquivo_ativas = db.query(models.ContratoArquivoMeta).filter(
+        models.ContratoArquivoMeta.contrato_id == contrato.id,
+        models.ContratoArquivoMeta.ativo == True,  # noqa: E712
+    ).all()
+    usa_metas_arquivo = len(metas_arquivo_ativas) > 0
+
+    total_meta = 0
+    total_executadas = 0
+    if usa_metas_arquivo:
+        total_meta = sum(m.quantidade_meta or 0 for m in metas_arquivo_ativas)
+        total_executadas = sum(m.quantidade_executada or 0 for m in metas_arquivo_ativas)
+    else:
+        total_meta = sum((i.quantidade_contratada or 0) for i in (contrato.itens or []))
+        total_executadas = sum((i.quantidade_executada or 0) for i in (contrato.itens or []))
+
+    meta_diaria_total = sum((i.quantidade_diaria_meta or 0) for i in (contrato.itens or []))
+
+    executadas_hoje = 0
+    if meta_diaria_total > 0:
+        pares_meta_arquivo = {(m.contrato_id, m.arquivo_audio_id) for m in metas_arquivo_ativas}
+        veiculacoes_hoje = db.query(models.Veiculacao).filter(
+            models.Veiculacao.contrato_id == contrato.id,
+            models.Veiculacao.data_hora.between(inicio_dia, fim_dia),
+            models.Veiculacao.contabilizada == True,  # noqa: E712
+        ).all()
+
+        for veiculacao in veiculacoes_hoje:
+            if (veiculacao.contrato_id, veiculacao.arquivo_audio_id) in pares_meta_arquivo:
+                continue
+            item = resolver_item_contrato_para_veiculacao(contrato, veiculacao.tipo_programa)
+            if item and (item.quantidade_diaria_meta or 0) > 0:
+                executadas_hoje += 1
+
+    percentual_total = 0.0
+    if total_meta > 0:
+        percentual_total = round((total_executadas / total_meta) * 100, 2)
+
+    percentual_diario = 0.0
+    if meta_diaria_total > 0:
+        percentual_diario = round((executadas_hoje / meta_diaria_total) * 100, 2)
+
+    return {
+        "contrato_id": contrato.id,
+        "numero_contrato": contrato.numero_contrato,
+        "data_referencia": data_ref,
+        "usa_metas_arquivo": usa_metas_arquivo,
+        "total": {
+            "meta": total_meta,
+            "executadas": total_executadas,
+            "percentual": percentual_total,
+        },
+        "diario": {
+            "meta": meta_diaria_total,
+            "executadas": executadas_hoje,
+            "percentual": percentual_diario,
+        },
     }
 
 
@@ -315,8 +505,28 @@ def criar_contrato(
     for meta in contrato.arquivos_metas:
         _validar_arquivo_do_cliente(db, contrato.cliente_id, meta.arquivo_audio_id)
 
+    _validar_regras_itens_por_tipo_contrato(contrato.data_fim, contrato.itens)
+
     try:
-        return criar_contrato_com_itens(db, contrato)
+        db_contrato = criar_contrato_com_itens(db, contrato)
+        if contrato.nf_dinamica == "unica" and (
+            contrato.numero_nf
+            or contrato.data_emissao_nf
+            or contrato.status_nf != "pendente"
+        ):
+            nota = models.NotaFiscal(
+                contrato_id=db_contrato.id,
+                tipo="unica",
+                status=contrato.status_nf,
+                numero=contrato.numero_nf,
+                data_emissao=contrato.data_emissao_nf,
+            )
+            db.add(nota)
+            db.flush()
+            _sincronizar_resumo_nf_contrato(db, db_contrato)
+            db.commit()
+            db.refresh(db_contrato)
+        return db_contrato
     except NumeroContratoConflictError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -343,6 +553,9 @@ def adicionar_item_contrato(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Contrato com ID {contrato_id} nao encontrado",
         )
+
+    itens_validacao = list(contrato.itens or []) + [item]
+    _validar_regras_itens_por_tipo_contrato(contrato.data_fim, itens_validacao)
 
     db_item = models.ContratoItem(
         contrato_id=contrato_id,
@@ -378,6 +591,13 @@ def atualizar_item_contrato(
             detail=f"Item {item_id} do contrato {contrato_id} nao encontrado",
         )
 
+    db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not db_contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
     update_data = item_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_item, field, value)
@@ -387,6 +607,8 @@ def atualizar_item_contrato(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item precisa ter quantidade_contratada, quantidade_diaria_meta ou ambas",
         )
+
+    _validar_regras_itens_por_tipo_contrato(db_contrato.data_fim, db_contrato.itens or [])
 
     db.commit()
     db.refresh(db_item)
@@ -528,13 +750,162 @@ def atualizar_contrato(
     for field, value in update_data.items():
         setattr(db_contrato, field, value)
 
+    _validar_regras_itens_por_tipo_contrato(db_contrato.data_fim, db_contrato.itens or [])
+
+    tem_notas = db.query(models.NotaFiscal.id).filter(
+        models.NotaFiscal.contrato_id == db_contrato.id
+    ).first() is not None
+    if tem_notas:
+        _sincronizar_resumo_nf_contrato(db, db_contrato)
+
     db.commit()
     db.refresh(db_contrato)
     return db_contrato
 
 
-@router.patch("/{contrato_id}/nota-fiscal")
+@router.get(
+    "/{contrato_id}/notas-fiscais",
+    response_model=List[schemas.NotaFiscalResponse],
+)
+def listar_notas_fiscais_contrato(
+    contrato_id: int,
+    tipo: Optional[str] = Query(None, pattern="^(unica|mensal)$"),
+    competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
+    status_nf: Optional[str] = Query(None, pattern="^(pendente|emitida|paga|cancelada)$"),
+    db: Session = Depends(get_db),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    query = db.query(models.NotaFiscal).filter(
+        models.NotaFiscal.contrato_id == contrato_id
+    )
+    if tipo:
+        query = query.filter(models.NotaFiscal.tipo == tipo)
+    if competencia:
+        query = query.filter(
+            models.NotaFiscal.competencia == _parse_competencia_yyyy_mm(competencia)
+        )
+    if status_nf:
+        query = query.filter(models.NotaFiscal.status == status_nf)
+
+    return (
+        query.order_by(
+            models.NotaFiscal.competencia.desc(),
+            models.NotaFiscal.created_at.desc(),
+            models.NotaFiscal.id.desc(),
+        ).all()
+    )
+
+
+@router.post(
+    "/{contrato_id}/notas-fiscais",
+    response_model=schemas.NotaFiscalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_nota_fiscal_contrato(
+    contrato_id: int,
+    payload: schemas.NotaFiscalCreate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    _validar_tipo_nota_para_contrato(contrato, payload.tipo)
+    if payload.tipo == "mensal":
+        _validar_competencia_no_periodo_contrato(contrato, payload.competencia)
+
+    nota = models.NotaFiscal(
+        contrato_id=contrato_id,
+        tipo=payload.tipo,
+        competencia=payload.competencia,
+        status=payload.status,
+        numero=payload.numero,
+        serie=payload.serie,
+        data_emissao=payload.data_emissao,
+        data_pagamento=payload.data_pagamento,
+        valor=payload.valor,
+        observacoes=payload.observacoes,
+    )
+    db.add(nota)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ja existe nota para este tipo/competencia neste contrato.",
+        )
+
+    _sincronizar_resumo_nf_contrato(db, contrato)
+    db.commit()
+    db.refresh(nota)
+    return nota
+
+
+@router.patch(
+    "/notas-fiscais/{nota_id}",
+    response_model=schemas.NotaFiscalResponse,
+)
 def atualizar_nota_fiscal(
+    nota_id: int,
+    payload: schemas.NotaFiscalUpdate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    nota = db.query(models.NotaFiscal).filter(models.NotaFiscal.id == nota_id).first()
+    if not nota:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Nota fiscal com ID {nota_id} nao encontrada",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(nota, field, value)
+
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == nota.contrato_id).first()
+    _sincronizar_resumo_nf_contrato(db, contrato)
+    db.commit()
+    db.refresh(nota)
+    return nota
+
+
+@router.delete(
+    "/notas-fiscais/{nota_id}",
+    response_model=schemas.MessageResponse,
+)
+def deletar_nota_fiscal(
+    nota_id: int,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    nota = db.query(models.NotaFiscal).filter(models.NotaFiscal.id == nota_id).first()
+    if not nota:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Nota fiscal com ID {nota_id} nao encontrada",
+        )
+
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == nota.contrato_id).first()
+    db.delete(nota)
+    db.flush()
+    _sincronizar_resumo_nf_contrato(db, contrato)
+    db.commit()
+    return {"message": f"Nota fiscal {nota_id} removida com sucesso", "success": True}
+
+
+@router.patch("/{contrato_id}/nota-fiscal")
+def atualizar_nota_fiscal_legacy(
     contrato_id: int,
     status_nf: str = Query(..., pattern="^(pendente|emitida|paga)$"),
     numero_nf: Optional[str] = Query(None),
@@ -542,29 +913,47 @@ def atualizar_nota_fiscal(
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
-    db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
-    if not db_contrato:
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Contrato com ID {contrato_id} nao encontrado",
         )
+    if contrato.nf_dinamica != "unica":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Endpoint legado de NF aplica-se somente a contratos com dinamica unica.",
+        )
 
-    db_contrato.status_nf = status_nf
-    db_contrato.numero_nf = numero_nf
-    db_contrato.data_emissao_nf = data_emissao
+    nota = db.query(models.NotaFiscal).filter(
+        models.NotaFiscal.contrato_id == contrato_id,
+        models.NotaFiscal.tipo == "unica",
+    ).first()
+    if not nota:
+        nota = models.NotaFiscal(
+            contrato_id=contrato_id,
+            tipo="unica",
+            status=status_nf,
+        )
+        db.add(nota)
+        db.flush()
 
+    nota.status = status_nf
+    nota.numero = numero_nf
+    nota.data_emissao = data_emissao
+    _sincronizar_resumo_nf_contrato(db, contrato)
     db.commit()
-    db.refresh(db_contrato)
+    db.refresh(contrato)
 
     return {
-        "message": f"Nota fiscal do contrato {db_contrato.numero_contrato} atualizada",
+        "message": f"Nota fiscal do contrato {contrato.numero_contrato} atualizada",
         "success": True,
         "contrato": {
-            "id": db_contrato.id,
-            "numero_contrato": db_contrato.numero_contrato,
-            "status_nf": db_contrato.status_nf,
-            "numero_nf": db_contrato.numero_nf,
-            "data_emissao_nf": db_contrato.data_emissao_nf,
+            "id": contrato.id,
+            "numero_contrato": contrato.numero_contrato,
+            "status_nf": contrato.status_nf,
+            "numero_nf": contrato.numero_nf,
+            "data_emissao_nf": contrato.data_emissao_nf,
         },
     }
 
@@ -579,25 +968,14 @@ def listar_faturamentos_mensais_contrato(
     status_nf: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
-    if not contrato:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contrato com ID {contrato_id} nao encontrado",
-        )
-
-    query = db.query(models.ContratoFaturamentoMensal).filter(
-        models.ContratoFaturamentoMensal.contrato_id == contrato_id
+    notas = listar_notas_fiscais_contrato(
+        contrato_id=contrato_id,
+        tipo="mensal",
+        competencia=competencia,
+        status_nf=status_nf,
+        db=db,
     )
-
-    if competencia:
-        competencia_ref = _parse_competencia_yyyy_mm(competencia)
-        query = query.filter(models.ContratoFaturamentoMensal.competencia == competencia_ref)
-
-    if status_nf:
-        query = query.filter(models.ContratoFaturamentoMensal.status_nf == status_nf)
-
-    return query.order_by(models.ContratoFaturamentoMensal.competencia.desc()).all()
+    return [_nota_para_faturamento_response(n) for n in notas]
 
 
 @router.post(
@@ -617,30 +995,26 @@ def criar_faturamento_mensal_contrato(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Contrato com ID {contrato_id} nao encontrado",
         )
+    if contrato.nf_dinamica != "mensal":
+        contrato.nf_dinamica = "mensal"
+        db.flush()
 
-    _validar_competencia_no_periodo_contrato(contrato, payload.competencia)
-
-    faturamento = models.ContratoFaturamentoMensal(
+    nota = criar_nota_fiscal_contrato(
         contrato_id=contrato_id,
-        competencia=payload.competencia,
-        status_nf=payload.status_nf,
-        numero_nf=payload.numero_nf,
-        data_emissao_nf=payload.data_emissao_nf,
-        data_pagamento_nf=payload.data_pagamento_nf,
-        valor_cobrado=payload.valor_cobrado,
-        observacoes=payload.observacoes,
+        payload=schemas.NotaFiscalCreate(
+            tipo="mensal",
+            competencia=payload.competencia,
+            status=payload.status_nf,
+            numero=payload.numero_nf,
+            data_emissao=payload.data_emissao_nf,
+            data_pagamento=payload.data_pagamento_nf,
+            valor=payload.valor_cobrado,
+            observacoes=payload.observacoes,
+        ),
+        db=db,
+        _auth=_auth,
     )
-    db.add(faturamento)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ja existe faturamento para essa competencia neste contrato.",
-        )
-    db.refresh(faturamento)
-    return faturamento
+    return _nota_para_faturamento_response(nota)
 
 
 @router.post(
@@ -654,41 +1028,46 @@ def emitir_nota_fiscal_mensal_contrato(
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
+    competencia_ref = _parse_competencia_yyyy_mm(competencia)
+
     contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not contrato:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Contrato com ID {contrato_id} nao encontrado",
         )
-
-    competencia_ref = _parse_competencia_yyyy_mm(competencia)
+    if contrato.nf_dinamica != "mensal":
+        contrato.nf_dinamica = "mensal"
+        db.flush()
     _validar_competencia_no_periodo_contrato(contrato, competencia_ref)
 
-    faturamento = db.query(models.ContratoFaturamentoMensal).filter(
-        models.ContratoFaturamentoMensal.contrato_id == contrato_id,
-        models.ContratoFaturamentoMensal.competencia == competencia_ref,
+    nota = db.query(models.NotaFiscal).filter(
+        models.NotaFiscal.contrato_id == contrato_id,
+        models.NotaFiscal.tipo == "mensal",
+        models.NotaFiscal.competencia == competencia_ref,
     ).first()
-
-    if not faturamento:
-        faturamento = models.ContratoFaturamentoMensal(
+    if not nota:
+        nota = models.NotaFiscal(
             contrato_id=contrato_id,
+            tipo="mensal",
             competencia=competencia_ref,
-            status_nf="pendente",
+            status="pendente",
         )
-        db.add(faturamento)
+        db.add(nota)
         db.flush()
 
-    faturamento.status_nf = "emitida"
-    faturamento.numero_nf = payload.numero_nf
-    faturamento.data_emissao_nf = payload.data_emissao_nf or date.today()
+    nota.status = "emitida"
+    nota.numero = payload.numero_nf
+    nota.data_emissao = payload.data_emissao_nf or date.today()
     if payload.valor_cobrado is not None:
-        faturamento.valor_cobrado = payload.valor_cobrado
+        nota.valor = payload.valor_cobrado
     if payload.observacoes is not None:
-        faturamento.observacoes = payload.observacoes
+        nota.observacoes = payload.observacoes
 
+    _sincronizar_resumo_nf_contrato(db, contrato)
     db.commit()
-    db.refresh(faturamento)
-    return faturamento
+    db.refresh(nota)
+    return _nota_para_faturamento_response(nota)
 
 
 @router.patch(
@@ -701,22 +1080,20 @@ def atualizar_faturamento_mensal(
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
-    faturamento = db.query(models.ContratoFaturamentoMensal).filter(
-        models.ContratoFaturamentoMensal.id == faturamento_id
-    ).first()
-    if not faturamento:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Faturamento mensal com ID {faturamento_id} nao encontrado",
-        )
-
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(faturamento, field, value)
-
-    db.commit()
-    db.refresh(faturamento)
-    return faturamento
+    nota = atualizar_nota_fiscal(
+        nota_id=faturamento_id,
+        payload=schemas.NotaFiscalUpdate(
+            status=payload.status_nf,
+            numero=payload.numero_nf,
+            data_emissao=payload.data_emissao_nf,
+            data_pagamento=payload.data_pagamento_nf,
+            valor=payload.valor_cobrado,
+            observacoes=payload.observacoes,
+        ),
+        db=db,
+        _auth=_auth,
+    )
+    return _nota_para_faturamento_response(nota)
 
 
 @router.delete("/{contrato_id}", response_model=schemas.MessageResponse)

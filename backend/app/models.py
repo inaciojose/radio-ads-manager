@@ -93,6 +93,7 @@ class Contrato(Base):
     valor_total = Column(Float)
     status_contrato = Column(String(20), default="ativo")  # 'ativo', 'concluído', 'cancelado'
     status_nf = Column(String(20), default="pendente")  # 'pendente', 'emitida', 'paga'
+    nf_dinamica = Column(String(20), default="unica", nullable=False)  # unica|mensal
     numero_nf = Column(String(50))
     data_emissao_nf = Column(Date)
     observacoes = Column(Text)
@@ -106,6 +107,11 @@ class Contrato(Base):
     veiculacoes = relationship("Veiculacao", back_populates="contrato")
     faturamentos_mensais = relationship(
         "ContratoFaturamentoMensal",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+    )
+    notas_fiscais = relationship(
+        "NotaFiscal",
         back_populates="contrato",
         cascade="all, delete-orphan",
     )
@@ -216,6 +222,32 @@ class ContratoFaturamentoMensal(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     contrato = relationship("Contrato", back_populates="faturamentos_mensais")
+
+
+class NotaFiscal(Base):
+    """
+    Nota fiscal de contrato (dinamica unica ou mensal).
+    """
+    __tablename__ = "notas_fiscais"
+    __table_args__ = (
+        UniqueConstraint("contrato_id", "tipo", "competencia", name="uq_nota_fiscal_competencia"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False, index=True)
+    tipo = Column(String(20), nullable=False, default="unica")  # unica|mensal
+    competencia = Column(Date, nullable=True, index=True)  # primeiro dia do mes quando mensal
+    status = Column(String(20), nullable=False, default="pendente")  # pendente|emitida|paga|cancelada
+    numero = Column(String(50))
+    serie = Column(String(20))
+    data_emissao = Column(Date)
+    data_pagamento = Column(Date)
+    valor = Column(Float)
+    observacoes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    contrato = relationship("Contrato", back_populates="notas_fiscais")
 
 
 # ============================================

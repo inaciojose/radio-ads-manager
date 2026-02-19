@@ -8,6 +8,35 @@ from sqlalchemy.orm import Session
 from app import models
 
 
+def resolver_item_contrato_para_veiculacao(
+    contrato: models.Contrato,
+    tipo_programa: Optional[str],
+):
+    """
+    Resolve o item de contrato para contabilização.
+    Estratégia:
+    1) tentar match exato por tipo_programa;
+    2) se houver item único, usar esse item;
+    3) fallback configurável (padrão: primeiro item).
+    """
+    itens = list(contrato.itens or [])
+    if not itens:
+        return None
+
+    if tipo_programa:
+        item = next((i for i in itens if i.tipo_programa == tipo_programa), None)
+        if item:
+            return item
+
+    if len(itens) == 1:
+        return itens[0]
+
+    fallback = os.getenv("CONTRATO_ITEM_FALLBACK_STRATEGY", "first").strip().lower()
+    if fallback == "first":
+        return itens[0]
+    return None
+
+
 def buscar_item_contabilizado(db: Session, veiculacao: models.Veiculacao):
     """
     Resolve qual item de contrato foi (ou seria) contabilizado para a veiculação.
@@ -23,18 +52,7 @@ def buscar_item_contabilizado(db: Session, veiculacao: models.Veiculacao):
     if not contrato:
         return None
 
-    if veiculacao.tipo_programa:
-        item = db.query(models.ContratoItem).filter(
-            models.ContratoItem.contrato_id == contrato.id,
-            models.ContratoItem.tipo_programa == veiculacao.tipo_programa
-        ).first()
-        if item:
-            return item
-
-    if contrato.itens:
-        return contrato.itens[0]
-
-    return None
+    return resolver_item_contrato_para_veiculacao(contrato, veiculacao.tipo_programa)
 
 
 def buscar_meta_contabilizada(db: Session, veiculacao: models.Veiculacao):
@@ -233,15 +251,10 @@ def processar_veiculacoes_periodo(
                 meta.quantidade_executada += 1
                 contabilizada = True
             else:
-                item = None
-                if veiculacao.tipo_programa:
-                    item = db.query(models.ContratoItem).filter(
-                        models.ContratoItem.contrato_id == contrato.id,
-                        models.ContratoItem.tipo_programa == veiculacao.tipo_programa
-                    ).first()
-
-                if veiculacao.tipo_programa and not item and contrato.itens:
-                    item = contrato.itens[0]
+                item = resolver_item_contrato_para_veiculacao(
+                    contrato,
+                    veiculacao.tipo_programa,
+                )
 
                 if item:
                     item.quantidade_executada += 1
