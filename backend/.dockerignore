@@ -1,0 +1,11 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests/
+scripts/
+radio_ads.db
+test_radio_ads.db
+.env

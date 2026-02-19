@@ -91,6 +91,25 @@ Requisitos mínimos para produção:
 - `INITIAL_ADMIN_PASSWORD` forte (10+ caracteres)
 - `APP_ENV=production`
 
+## Deploy com Docker (Produção)
+Arquivos:
+- `backend/Dockerfile`
+- `backend/docker-compose.prod.yml`
+- `backend/.env.prod.example`
+
+Passos:
+```bash
+cd backend
+cp .env.prod.example .env.prod
+# edite .env.prod com senhas/chaves reais
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Observações:
+- A API sobe executando `alembic upgrade head` automaticamente antes de iniciar.
+- Healthchecks habilitados para `postgres` e `api`.
+- Política de reinício: `unless-stopped`.
+
 ## Documentação da API
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
