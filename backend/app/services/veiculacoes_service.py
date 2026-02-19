@@ -1,4 +1,5 @@
-from datetime import date, datetime
+import os
+from datetime import date, datetime, time
 from typing import Optional
 
 from sqlalchemy import or_
@@ -33,6 +34,104 @@ def buscar_item_contabilizado(db: Session, veiculacao: models.Veiculacao):
     if contrato.itens:
         return contrato.itens[0]
 
+    return None
+
+
+def buscar_meta_contabilizada(db: Session, veiculacao: models.Veiculacao):
+    """
+    Resolve qual meta por arquivo foi (ou seria) contabilizada para a veiculação.
+    """
+    if not veiculacao.contrato_id:
+        return None
+
+    return db.query(models.ContratoArquivoMeta).filter(
+        models.ContratoArquivoMeta.contrato_id == veiculacao.contrato_id,
+        models.ContratoArquivoMeta.arquivo_audio_id == veiculacao.arquivo_audio_id,
+        models.ContratoArquivoMeta.ativo == True,  # noqa: E712
+    ).first()
+
+
+def _parse_hora(valor: str) -> time:
+    raw = valor.strip()
+    if len(raw.split(":")) == 2:
+        raw = f"{raw}:00"
+    return time.fromisoformat(raw)
+
+
+def _parse_dias_semana(valor: str) -> set[int]:
+    dias = set()
+    for trecho in valor.split(","):
+        item = trecho.strip()
+        if not item:
+            continue
+        if "-" in item:
+            ini_str, fim_str = item.split("-", 1)
+            ini = int(ini_str.strip())
+            fim = int(fim_str.strip())
+            for d in range(ini, fim + 1):
+                dias.add(d)
+        else:
+            dias.add(int(item))
+    return dias
+
+
+def _carregar_regras_bloqueio():
+    """
+    Regras no formato:
+      frequencia|dias_iso|hh:mm-hh:mm|motivo
+    Exemplo:
+      102.7|1-5|11:00-14:00|obs_video
+    """
+    raw = os.getenv(
+        "AUTO_AUDIT_BLOCK_WINDOWS",
+        "102.7|1-5|11:00-14:00|obs_video",
+    )
+    regras = []
+    for chunk in raw.split(";"):
+        item = chunk.strip()
+        if not item:
+            continue
+        partes = [p.strip() for p in item.split("|")]
+        if len(partes) != 4:
+            continue
+        frequencia, dias_str, janela, motivo = partes
+        if "-" not in janela:
+            continue
+        inicio_str, fim_str = janela.split("-", 1)
+        regras.append(
+            {
+                "frequencia": frequencia,
+                "dias": _parse_dias_semana(dias_str),
+                "inicio": _parse_hora(inicio_str),
+                "fim": _parse_hora(fim_str),
+                "motivo": motivo or "bloqueio_auditoria_automatica",
+            }
+        )
+    return regras
+
+
+def _auditoria_automatica_bloqueada(veiculacao: models.Veiculacao) -> Optional[str]:
+    # Bloqueio só para origem automática do Zara.
+    if (veiculacao.fonte or "zara_log") != "zara_log":
+        return None
+
+    if not veiculacao.frequencia:
+        return None
+
+    regras = _carregar_regras_bloqueio()
+    if not regras:
+        return None
+
+    horario = veiculacao.data_hora.time()
+    dia_iso = veiculacao.data_hora.isoweekday()
+
+    for regra in regras:
+        if regra["frequencia"] != veiculacao.frequencia:
+            continue
+        if dia_iso not in regra["dias"]:
+            continue
+        if regra["inicio"] <= horario < regra["fim"]:
+            return regra["motivo"]
     return None
 
 
@@ -72,10 +171,14 @@ def processar_veiculacoes_periodo(
 
     for veiculacao in veiculacoes:
         try:
-            if force and veiculacao.processado:
-                item_anterior = buscar_item_contabilizado(db, veiculacao)
-                if item_anterior and item_anterior.quantidade_executada > 0:
-                    item_anterior.quantidade_executada -= 1
+            if force and veiculacao.processado and veiculacao.contabilizada:
+                meta_anterior = buscar_meta_contabilizada(db, veiculacao)
+                if meta_anterior and meta_anterior.quantidade_executada > 0:
+                    meta_anterior.quantidade_executada -= 1
+                else:
+                    item_anterior = buscar_item_contabilizado(db, veiculacao)
+                    if item_anterior and item_anterior.quantidade_executada > 0:
+                        item_anterior.quantidade_executada -= 1
 
             arquivo = veiculacao.arquivo_audio
             if not arquivo:
@@ -104,24 +207,45 @@ def processar_veiculacoes_periodo(
 
             if not contrato:
                 veiculacao.processado = True
+                veiculacao.contabilizada = False
                 veiculacao.contrato_id = None
                 processadas += 1
                 continue
 
-            item = None
-            if veiculacao.tipo_programa:
-                item = db.query(models.ContratoItem).filter(
-                    models.ContratoItem.contrato_id == contrato.id,
-                    models.ContratoItem.tipo_programa == veiculacao.tipo_programa
-                ).first()
+            bloqueio = _auditoria_automatica_bloqueada(veiculacao)
+            if bloqueio:
+                veiculacao.processado = True
+                veiculacao.contabilizada = False
+                veiculacao.contrato_id = contrato.id
+                processadas += 1
+                continue
 
-            if not item and contrato.itens:
-                item = contrato.itens[0]
+            contabilizada = False
+            meta = db.query(models.ContratoArquivoMeta).filter(
+                models.ContratoArquivoMeta.contrato_id == contrato.id,
+                models.ContratoArquivoMeta.arquivo_audio_id == veiculacao.arquivo_audio_id,
+                models.ContratoArquivoMeta.ativo == True,  # noqa: E712
+            ).first()
+            if meta:
+                meta.quantidade_executada += 1
+                contabilizada = True
+            else:
+                item = None
+                if veiculacao.tipo_programa:
+                    item = db.query(models.ContratoItem).filter(
+                        models.ContratoItem.contrato_id == contrato.id,
+                        models.ContratoItem.tipo_programa == veiculacao.tipo_programa
+                    ).first()
 
-            if item:
-                item.quantidade_executada += 1
+                if veiculacao.tipo_programa and not item and contrato.itens:
+                    item = contrato.itens[0]
+
+                if item:
+                    item.quantidade_executada += 1
+                    contabilizada = True
 
             veiculacao.processado = True
+            veiculacao.contabilizada = contabilizada
             veiculacao.contrato_id = contrato.id
             processadas += 1
         except Exception:

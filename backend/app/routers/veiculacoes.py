@@ -17,6 +17,7 @@ from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app import models, schemas
 from app.services.veiculacoes_service import (
+    buscar_meta_contabilizada,
     buscar_item_contabilizado,
     processar_veiculacoes_periodo,
 )
@@ -183,6 +184,80 @@ def criar_veiculacao(
     return db_veiculacao
 
 
+@router.post("/lancamentos/lote")
+def lancar_veiculacoes_lote(
+    payload: schemas.VeiculacaoLoteManualCreate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    """
+    Cria várias veiculações manuais para uma data/horários específicos.
+    Útil para registrar execuções do OBS fora do Zara Studio.
+    """
+    arquivo = db.query(models.ArquivoAudio).filter(
+        models.ArquivoAudio.id == payload.arquivo_audio_id
+    ).first()
+    if not arquivo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Arquivo com ID {payload.arquivo_audio_id} não encontrado"
+        )
+
+    criadas = 0
+    existentes = 0
+    erros_horario: list[str] = []
+    vistos_no_payload: set[tuple[int, datetime, str]] = set()
+
+    for horario_str in payload.horarios:
+        horario_raw = (horario_str or "").strip()
+        try:
+            if len(horario_raw.split(":")) == 2:
+                horario_raw = f"{horario_raw}:00"
+            horario = datetime.strptime(horario_raw, "%H:%M:%S").time()
+        except ValueError:
+            erros_horario.append(horario_str)
+            continue
+
+        data_hora = datetime.combine(payload.data, horario)
+        chave = (payload.arquivo_audio_id, data_hora, payload.frequencia)
+        if chave in vistos_no_payload:
+            existentes += 1
+            continue
+
+        consulta = db.query(models.Veiculacao).filter(
+            models.Veiculacao.arquivo_audio_id == payload.arquivo_audio_id,
+            models.Veiculacao.data_hora == data_hora,
+            models.Veiculacao.frequencia == payload.frequencia,
+        )
+        existente = consulta.first()
+        if existente:
+            existentes += 1
+            continue
+
+        db.add(models.Veiculacao(
+            arquivo_audio_id=payload.arquivo_audio_id,
+            data_hora=data_hora,
+            frequencia=payload.frequencia,
+            tipo_programa=payload.tipo_programa,
+            fonte=payload.fonte,
+            processado=False,
+            contabilizada=False,
+        ))
+        vistos_no_payload.add(chave)
+        criadas += 1
+
+    db.commit()
+    return {
+        "message": "Lançamento em lote concluído",
+        "success": True,
+        "detalhes": {
+            "criadas": criadas,
+            "existentes": existentes,
+            "horarios_invalidos": erros_horario,
+        }
+    }
+
+
 # ============================================
 # ENDPOINT: Deletar veiculação
 # ============================================
@@ -215,11 +290,16 @@ def deletar_veiculacao(
     foi_processada = veiculacao.processado
     contador_ajustado = False
 
-    if foi_processada:
-        item = buscar_item_contabilizado(db, veiculacao)
-        if item and item.quantidade_executada > 0:
-            item.quantidade_executada -= 1
+    if foi_processada and veiculacao.contabilizada:
+        meta = buscar_meta_contabilizada(db, veiculacao)
+        if meta and meta.quantidade_executada > 0:
+            meta.quantidade_executada -= 1
             contador_ajustado = True
+        else:
+            item = buscar_item_contabilizado(db, veiculacao)
+            if item and item.quantidade_executada > 0:
+                item.quantidade_executada -= 1
+                contador_ajustado = True
     
     db.delete(veiculacao)
     db.commit()

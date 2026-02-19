@@ -100,6 +100,56 @@ class ContratoItemResponse(ContratoItemBase):
 
 
 # ============================================
+# SCHEMAS: ContratoArquivoMeta
+# ============================================
+
+class ContratoArquivoMetaBase(BaseModel):
+    arquivo_audio_id: int
+    quantidade_meta: int = Field(..., gt=0)
+    modo_veiculacao: str = Field(default="fixo", description="fixo ou rodizio")
+    ativo: bool = True
+    observacoes: Optional[str] = None
+
+    @validator("modo_veiculacao")
+    def validar_modo_veiculacao(cls, v):
+        if v not in ["fixo", "rodizio"]:
+            raise ValueError('modo_veiculacao deve ser "fixo" ou "rodizio"')
+        return v
+
+
+class ContratoArquivoMetaCreate(ContratoArquivoMetaBase):
+    pass
+
+
+class ContratoArquivoMetaUpdate(BaseModel):
+    quantidade_meta: Optional[int] = Field(None, gt=0)
+    modo_veiculacao: Optional[str] = None
+    ativo: Optional[bool] = None
+    observacoes: Optional[str] = None
+
+    @validator("modo_veiculacao")
+    def validar_modo_veiculacao_update(cls, v):
+        if v is None:
+            return v
+        if v not in ["fixo", "rodizio"]:
+            raise ValueError('modo_veiculacao deve ser "fixo" ou "rodizio"')
+        return v
+
+
+class ContratoArquivoMetaResponse(ContratoArquivoMetaBase):
+    id: int
+    contrato_id: int
+    quantidade_executada: int
+    percentual_execucao: float
+    quantidade_restante: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================
 # SCHEMAS: Contrato
 # ============================================
 
@@ -145,6 +195,7 @@ class ContratoBase(BaseModel):
 class ContratoCreate(ContratoBase):
     """Schema para criar contrato com seus itens"""
     itens: List[ContratoItemCreate] = Field(..., min_items=1, description="Itens do contrato")
+    arquivos_metas: List[ContratoArquivoMetaCreate] = Field(default_factory=list)
 
 
 class ContratoUpdate(BaseModel):
@@ -175,6 +226,7 @@ class ContratoResponse(ContratoBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     itens: List[ContratoItemResponse] = []
+    arquivos_metas: List[ContratoArquivoMetaResponse] = []
     
     class Config:
         from_attributes = True
@@ -259,10 +311,27 @@ class VeiculacaoCreate(VeiculacaoBase):
     pass
 
 
+class VeiculacaoLoteManualCreate(BaseModel):
+    """Schema para lançamento manual em lote (OBS/manual)."""
+    arquivo_audio_id: int
+    data: date
+    horarios: List[str] = Field(..., min_items=1, description="Lista HH:MM ou HH:MM:SS")
+    frequencia: str = Field(..., description='Frequência: 102.7 ou 104.7')
+    tipo_programa: Optional[str] = None
+    fonte: str = Field(default="obs_manual")
+
+    @validator("frequencia")
+    def validar_frequencia_lote(cls, v):
+        if v not in ["102.7", "104.7"]:
+            raise ValueError('Frequência da veiculação deve ser "102.7" ou "104.7"')
+        return v
+
+
 class VeiculacaoResponse(VeiculacaoBase):
     """Schema para retornar veiculação"""
     id: int
     processado: bool
+    contabilizada: bool
     
     class Config:
         from_attributes = True

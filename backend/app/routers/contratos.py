@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
@@ -19,6 +20,22 @@ router = APIRouter(
     prefix="/contratos",
     tags=["Contratos"],
 )
+
+
+def _validar_arquivo_do_cliente(db: Session, cliente_id: int, arquivo_audio_id: int):
+    arquivo = db.query(models.ArquivoAudio).filter(
+        models.ArquivoAudio.id == arquivo_audio_id
+    ).first()
+    if not arquivo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Arquivo com ID {arquivo_audio_id} nao encontrado",
+        )
+    if arquivo.cliente_id != cliente_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Arquivo {arquivo_audio_id} nao pertence ao cliente do contrato",
+        )
 
 
 @router.get("/", response_model=List[schemas.ContratoResponse])
@@ -176,6 +193,9 @@ def criar_contrato(
             detail=f"Cliente com ID {contrato.cliente_id} nao encontrado",
         )
 
+    for meta in contrato.arquivos_metas:
+        _validar_arquivo_do_cliente(db, contrato.cliente_id, meta.arquivo_audio_id)
+
     return criar_contrato_com_itens(db, contrato)
 
 
@@ -233,6 +253,123 @@ def atualizar_item_contrato(
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+@router.get("/{contrato_id}/arquivos-metas", response_model=List[schemas.ContratoArquivoMetaResponse])
+def listar_arquivos_metas_contrato(
+    contrato_id: int,
+    db: Session = Depends(get_db),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+    return (
+        db.query(models.ContratoArquivoMeta)
+        .filter(models.ContratoArquivoMeta.contrato_id == contrato_id)
+        .order_by(models.ContratoArquivoMeta.id.asc())
+        .all()
+    )
+
+
+@router.post(
+    "/{contrato_id}/arquivos-metas",
+    response_model=schemas.ContratoArquivoMetaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_arquivo_meta_contrato(
+    contrato_id: int,
+    meta: schemas.ContratoArquivoMetaCreate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Contrato com ID {contrato_id} nao encontrado",
+        )
+
+    _validar_arquivo_do_cliente(db, contrato.cliente_id, meta.arquivo_audio_id)
+    db_meta = models.ContratoArquivoMeta(
+        contrato_id=contrato_id,
+        arquivo_audio_id=meta.arquivo_audio_id,
+        quantidade_meta=meta.quantidade_meta,
+        modo_veiculacao=meta.modo_veiculacao,
+        ativo=meta.ativo,
+        observacoes=meta.observacoes,
+    )
+    db.add(db_meta)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ja existe meta para este arquivo neste contrato",
+        )
+    db.refresh(db_meta)
+    return db_meta
+
+
+@router.put(
+    "/{contrato_id}/arquivos-metas/{meta_id}",
+    response_model=schemas.ContratoArquivoMetaResponse,
+)
+def atualizar_arquivo_meta_contrato(
+    contrato_id: int,
+    meta_id: int,
+    meta_update: schemas.ContratoArquivoMetaUpdate,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    db_meta = db.query(models.ContratoArquivoMeta).filter(
+        models.ContratoArquivoMeta.id == meta_id,
+        models.ContratoArquivoMeta.contrato_id == contrato_id,
+    ).first()
+    if not db_meta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meta {meta_id} do contrato {contrato_id} nao encontrada",
+        )
+
+    update_data = meta_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_meta, field, value)
+
+    db.commit()
+    db.refresh(db_meta)
+    return db_meta
+
+
+@router.delete(
+    "/{contrato_id}/arquivos-metas/{meta_id}",
+    response_model=schemas.MessageResponse,
+)
+def deletar_arquivo_meta_contrato(
+    contrato_id: int,
+    meta_id: int,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    db_meta = db.query(models.ContratoArquivoMeta).filter(
+        models.ContratoArquivoMeta.id == meta_id,
+        models.ContratoArquivoMeta.contrato_id == contrato_id,
+    ).first()
+    if not db_meta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meta {meta_id} do contrato {contrato_id} nao encontrada",
+        )
+
+    db.delete(db_meta)
+    db.commit()
+    return {
+        "message": f"Meta de arquivo {meta_id} removida com sucesso",
+        "success": True,
+    }
 
 
 @router.put("/{contrato_id}", response_model=schemas.ContratoResponse)

@@ -147,6 +147,152 @@ def test_reprocessamento_force_nao_duplica_contagem(db):
     assert contrato_atualizado_2.itens[0].quantidade_executada == 1
 
 
+def test_zara_em_janela_obs_nao_contabiliza_automaticamente(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente OBS",
+            cnpj_cpf="11.111.111/0001-11",
+        ),
+        db=db,
+    )
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date(2026, 2, 1),
+            data_fim=date(2026, 2, 28),
+            frequencia="102.7",
+            valor_total=1000,
+            itens=[schemas.ContratoItemCreate(tipo_programa="esporte", quantidade_contratada=20)],
+        ),
+        db=db,
+    )
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="obs_video_spot.mp3",
+        titulo="OBS spot",
+    )
+    db.add(arquivo)
+    db.flush()
+    db.add(models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime(2026, 2, 16, 11, 30, 0),  # segunda-feira
+        frequencia="102.7",
+        tipo_programa="esporte",
+        fonte="zara_log",
+        processado=False,
+    ))
+    db.commit()
+
+    resp = veiculacoes_router.processar_veiculacoes(
+        data_inicio=date(2026, 2, 16),
+        data_fim=date(2026, 2, 16),
+        db=db,
+    )
+    assert resp["success"] is True
+
+    contrato_atualizado = contratos_router.buscar_contrato(contrato.id, db=db)
+    assert contrato_atualizado.itens[0].quantidade_executada == 0
+
+    veiculacao = db.query(models.Veiculacao).first()
+    assert veiculacao.processado is True
+    assert veiculacao.contabilizada is False
+
+
+def test_meta_por_arquivo_contabiliza_sem_tipo_programa(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Meta Arquivo",
+            cnpj_cpf="66.666.666/0001-66",
+        ),
+        db=db,
+    )
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="campanha_a.mp3",
+        titulo="Campanha A",
+    )
+    db.add(arquivo)
+    db.commit()
+    db.refresh(arquivo)
+
+    contrato = contratos_router.criar_contrato(
+        schemas.ContratoCreate(
+            cliente_id=cliente.id,
+            data_inicio=date.today(),
+            data_fim=date.today(),
+            frequencia="102.7",
+            valor_total=500,
+            itens=[schemas.ContratoItemCreate(tipo_programa="musical", quantidade_contratada=5)],
+            arquivos_metas=[
+                schemas.ContratoArquivoMetaCreate(
+                    arquivo_audio_id=arquivo.id,
+                    quantidade_meta=3,
+                    modo_veiculacao="rodizio",
+                )
+            ],
+        ),
+        db=db,
+    )
+    db.add(models.Veiculacao(
+        arquivo_audio_id=arquivo.id,
+        data_hora=datetime.combine(date.today(), datetime.min.time()).replace(hour=10),
+        frequencia="102.7",
+        tipo_programa=None,
+        fonte="obs_manual",
+        processado=False,
+        contabilizada=False,
+    ))
+    db.commit()
+
+    veiculacoes_router.processar_veiculacoes(
+        data_inicio=date.today(),
+        data_fim=date.today(),
+        db=db,
+    )
+
+    meta = db.query(models.ContratoArquivoMeta).filter(
+        models.ContratoArquivoMeta.contrato_id == contrato.id,
+        models.ContratoArquivoMeta.arquivo_audio_id == arquivo.id,
+    ).first()
+    assert meta is not None
+    assert meta.quantidade_executada == 1
+    assert contratos_router.buscar_contrato(contrato.id, db=db).itens[0].quantidade_executada == 0
+
+
+def test_lancamento_lote_manual_cria_sem_duplicar(db):
+    cliente = clientes_router.criar_cliente(
+        schemas.ClienteCreate(
+            nome="Cliente Lote",
+            cnpj_cpf="77.777.777/0001-77",
+        ),
+        db=db,
+    )
+    arquivo = models.ArquivoAudio(
+        cliente_id=cliente.id,
+        nome_arquivo="lote_obs.mp3",
+        titulo="Lote OBS",
+    )
+    db.add(arquivo)
+    db.commit()
+    db.refresh(arquivo)
+
+    payload = schemas.VeiculacaoLoteManualCreate(
+        arquivo_audio_id=arquivo.id,
+        data=date.today(),
+        horarios=["11:00", "11:00", "12:30:00", "25:99"],
+        frequencia="102.7",
+        fonte="obs_manual",
+    )
+    resp = veiculacoes_router.lancar_veiculacoes_lote(payload, db=db)
+    assert resp["success"] is True
+    assert resp["detalhes"]["criadas"] == 2
+    assert resp["detalhes"]["existentes"] == 1
+    assert "25:99" in resp["detalhes"]["horarios_invalidos"]
+
+    total = db.query(models.Veiculacao).count()
+    assert total == 2
+
+
 def test_atualizar_item_contrato_altera_quantidade(db):
     cliente = clientes_router.criar_cliente(
         schemas.ClienteCreate(

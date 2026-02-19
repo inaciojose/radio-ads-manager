@@ -5,7 +5,7 @@ Aqui definimos as classes Python que representam as tabelas do banco.
 O SQLAlchemy converte essas classes em tabelas automaticamente.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text, Date
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text, Date, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -102,6 +102,7 @@ class Contrato(Base):
     # Relacionamentos
     cliente = relationship("Cliente", back_populates="contratos")
     itens = relationship("ContratoItem", back_populates="contrato", cascade="all, delete-orphan")
+    arquivos_metas = relationship("ContratoArquivoMeta", back_populates="contrato", cascade="all, delete-orphan")
     veiculacoes = relationship("Veiculacao", back_populates="contrato")
     
     def __repr__(self):
@@ -148,6 +149,43 @@ class ContratoItem(Base):
         return max(0, self.quantidade_contratada - self.quantidade_executada)
 
 
+class ContratoArquivoMeta(Base):
+    """
+    Meta de veiculação por peça (arquivo) dentro de um contrato.
+
+    Permite campanhas com múltiplos spots no mesmo contrato, com meta
+    específica por arquivo.
+    """
+    __tablename__ = "contrato_arquivo_metas"
+    __table_args__ = (
+        UniqueConstraint("contrato_id", "arquivo_audio_id", name="uq_contrato_arquivo_meta"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
+    arquivo_audio_id = Column(Integer, ForeignKey("arquivos_audio.id"), nullable=False)
+    quantidade_meta = Column(Integer, nullable=False)
+    quantidade_executada = Column(Integer, default=0, nullable=False)
+    modo_veiculacao = Column(String(20), default="fixo", nullable=False)  # fixo|rodizio
+    ativo = Column(Boolean, default=True, nullable=False)
+    observacoes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    contrato = relationship("Contrato", back_populates="arquivos_metas")
+    arquivo_audio = relationship("ArquivoAudio", back_populates="contrato_metas")
+
+    @property
+    def percentual_execucao(self):
+        if self.quantidade_meta == 0:
+            return 0
+        return round((self.quantidade_executada / self.quantidade_meta) * 100, 2)
+
+    @property
+    def quantidade_restante(self):
+        return max(0, self.quantidade_meta - self.quantidade_executada)
+
+
 # ============================================
 # MODELO: ArquivoAudio
 # ============================================
@@ -172,6 +210,7 @@ class ArquivoAudio(Base):
     
     # Relacionamentos
     cliente = relationship("Cliente", back_populates="arquivos_audio")
+    contrato_metas = relationship("ContratoArquivoMeta", back_populates="arquivo_audio", cascade="all, delete-orphan")
     veiculacoes = relationship("Veiculacao", back_populates="arquivo_audio", cascade="all, delete-orphan")
     
     def __repr__(self):
@@ -198,6 +237,7 @@ class Veiculacao(Base):
     tipo_programa = Column(String(50))
     fonte = Column(String(50), default="zara_log")  # De onde veio a informação
     processado = Column(Boolean, default=False, index=True)  # Se já foi contabilizado
+    contabilizada = Column(Boolean, default=True, index=True)  # Se incrementou algum contador de contrato
     
     # Relacionamentos
     arquivo_audio = relationship("ArquivoAudio", back_populates="veiculacoes")

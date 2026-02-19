@@ -32,6 +32,17 @@ def criar_contrato_com_itens(db: Session, contrato: schemas.ContratoCreate):
         )
         db.add(db_item)
 
+    for meta in contrato.arquivos_metas:
+        db_meta = models.ContratoArquivoMeta(
+            contrato_id=db_contrato.id,
+            arquivo_audio_id=meta.arquivo_audio_id,
+            quantidade_meta=meta.quantidade_meta,
+            modo_veiculacao=meta.modo_veiculacao,
+            ativo=meta.ativo,
+            observacoes=meta.observacoes,
+        )
+        db.add(db_meta)
+
     db.commit()
     db.refresh(db_contrato)
     return db_contrato
