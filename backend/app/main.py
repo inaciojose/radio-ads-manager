@@ -10,10 +10,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
+import uuid
 
 from app.database import init_db, get_database_info
-from app.auth import ensure_initial_admin
+from app.auth import ensure_initial_admin, validate_auth_settings
 from app.routers import arquivos, auth, clientes, contratos, usuarios, veiculacoes
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+APP_DEBUG = _env_bool("APP_DEBUG", APP_ENV in {"development", "dev", "local"})
+API_DOCS_ENABLED = _env_bool("API_DOCS_ENABLED", APP_DEBUG)
 
 
 # ============================================
@@ -30,6 +43,9 @@ async def lifespan(app: FastAPI):
     """
     # STARTUP
     print("🚀 Iniciando Radio Ads Manager...")
+
+    # Hardening de configuração em produção
+    validate_auth_settings()
     
     # Inicializar banco de dados
     init_db()
@@ -63,8 +79,8 @@ app = FastAPI(
     description="API para gerenciamento de anúncios de rádio",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",      # Documentação interativa Swagger
-    redoc_url="/redoc"     # Documentação alternativa ReDoc
+    docs_url="/docs" if API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if API_DOCS_ENABLED else None,
 )
 
 
@@ -96,15 +112,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     Útil para debug e para que o frontend saiba o que aconteceu.
     """
     import traceback
-    
-    print(f"❌ Erro não tratado: {exc}")
+
+    error_id = str(uuid.uuid4())
+    print(f"❌ Erro não tratado [{error_id}]: {exc}")
     print(traceback.format_exc())
-    
+
     return JSONResponse(
         status_code=500,
         content={
             "error": "Erro interno do servidor",
-            "detail": str(exc),
+            "detail": str(exc) if APP_DEBUG else "Erro interno. Consulte os logs com o ID informado.",
+            "error_id": error_id,
             "success": False
         }
     )
@@ -180,11 +198,19 @@ app.include_router(usuarios.router)
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Rodar o servidor de desenvolvimento
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",  # Aceita conexões de qualquer IP
-        port=8000,       # Porta do servidor
-        reload=True      # Recarrega automaticamente quando código muda
-    )
+
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    reload_enabled = _env_bool("APP_RELOAD", APP_DEBUG)
+    workers = int(os.getenv("WEB_CONCURRENCY", "2"))
+
+    run_kwargs = {
+        "app": "app.main:app",
+        "host": host,
+        "port": port,
+        "reload": reload_enabled,
+    }
+    if not reload_enabled:
+        run_kwargs["workers"] = max(1, workers)
+
+    uvicorn.run(**run_kwargs)

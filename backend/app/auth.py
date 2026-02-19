@@ -27,6 +27,33 @@ ROLE_OPERADOR = "operador"
 security = HTTPBearer(auto_error=False)
 
 
+def _is_production_env() -> bool:
+    return os.getenv("APP_ENV", "development").strip().lower() in {"production", "prod"}
+
+
+def validate_auth_settings() -> None:
+    """
+    Falha rápido quando configuração insegura é usada em produção.
+    """
+    if not _is_production_env():
+        return
+
+    errors = []
+    weak_secrets = {"", "change-me-in-production", "seara-fm-warning", "changeme", "secret"}
+    weak_admin_passwords = {"", "admin123", "warning", "admin", "123456", "password"}
+
+    if TOKEN_SECRET in weak_secrets or len(TOKEN_SECRET) < 32:
+        errors.append("AUTH_TOKEN_SECRET deve ter pelo menos 32 caracteres e não pode ser padrão.")
+
+    if INITIAL_ADMIN_PASSWORD in weak_admin_passwords or len(INITIAL_ADMIN_PASSWORD) < 10:
+        errors.append(
+            "INITIAL_ADMIN_PASSWORD está fraco/padrão. Use uma senha forte com 10+ caracteres."
+        )
+
+    if errors:
+        raise RuntimeError("Configuração de autenticação insegura para produção: " + " ".join(errors))
+
+
 def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 

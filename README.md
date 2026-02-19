@@ -75,6 +75,22 @@ cd backend
 python -m app.main
 ```
 
+Execução em produção (exemplo):
+```bash
+cd backend
+APP_ENV=production \
+APP_DEBUG=false \
+API_DOCS_ENABLED=false \
+APP_RELOAD=false \
+WEB_CONCURRENCY=2 \
+python -m app.main
+```
+
+Requisitos mínimos para produção:
+- `AUTH_TOKEN_SECRET` com 32+ caracteres
+- `INITIAL_ADMIN_PASSWORD` forte (10+ caracteres)
+- `APP_ENV=production`
+
 ## Documentação da API
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
