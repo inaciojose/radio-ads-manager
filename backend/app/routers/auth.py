@@ -22,13 +22,7 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "usuario": {
-            "id": user.id,
-            "username": user.username,
-            "nome": user.nome,
-            "role": user.role,
-            "ativo": user.ativo,
-        },
+        "usuario": user,
     }
 
 

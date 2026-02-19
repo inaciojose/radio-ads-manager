@@ -330,6 +330,7 @@ class UsuarioCreate(UsuarioBase):
 
 
 class UsuarioUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=60)
     nome: Optional[str] = Field(None, min_length=3, max_length=120)
     role: Optional[str] = None
     ativo: Optional[bool] = None

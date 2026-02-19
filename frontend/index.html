@@ -47,6 +47,16 @@
           <i class="fas fa-folder-open"></i>
           <span>Arquivos</span>
         </a>
+        <a
+          href="#usuarios"
+          class="nav-item"
+          data-admin-only="true"
+          style="display: none"
+          onclick="showPage('usuarios', event)"
+        >
+          <i class="fas fa-user-shield"></i>
+          <span>Usuários</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -275,7 +285,7 @@
               <button id="contratos-prev" class="btn btn-secondary" onclick="changeContratosPage(-1)">
                 <i class="fas fa-chevron-left"></i> Anterior
               </button>
-              <span id="contratos-page-info">Página 1</span>
+              <span id="contratos-page-info" class="page-info">Página 1</span>
               <button id="contratos-next" class="btn btn-secondary" onclick="changeContratosPage(1)">
                 Próxima <i class="fas fa-chevron-right"></i>
               </button>
@@ -355,6 +365,58 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Usuários Page -->
+        <div id="page-usuarios" class="page">
+          <div class="page-header">
+            <button
+              class="btn btn-primary"
+              data-admin-only="true"
+              onclick="showUsuarioModal()"
+            >
+              <i class="fas fa-user-plus"></i> Novo Usuário
+            </button>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-usuarios"
+                placeholder="Buscar usuário..."
+                onkeyup="searchUsuarios()"
+              />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-usuarios">
+                <thead>
+                  <tr>
+                    <th>Usuário</th>
+                    <th>Nome</th>
+                    <th>Perfil</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="5" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination-bar">
+              <button id="usuarios-prev" class="btn btn-secondary" onclick="changeUsuariosPage(-1)">
+                <i class="fas fa-chevron-left"></i> Anterior
+              </button>
+              <span id="usuarios-page-info" class="page-info">Página 1</span>
+              <button id="usuarios-next" class="btn btn-secondary" onclick="changeUsuariosPage(1)">
+                Próxima <i class="fas fa-chevron-right"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -676,6 +738,55 @@
       </div>
     </div>
 
+    <!-- Usuário Modal -->
+    <div id="modal-usuario" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="usuario-modal-title">Novo Usuário</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-usuario">
+            <input type="hidden" id="usuario-id" />
+            <div class="form-group">
+              <label>Username *</label>
+              <input type="text" id="usuario-username" required />
+            </div>
+            <div class="form-group">
+              <label>Nome *</label>
+              <input type="text" id="usuario-nome" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Perfil *</label>
+                <select id="usuario-role">
+                  <option value="operador">Operador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="usuario-ativo">
+                  <option value="true">Ativo</option>
+                  <option value="false">Inativo</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Senha <span id="usuario-senha-obrigatoria">*</span></label>
+              <input type="password" id="usuario-password" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveUsuario()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="js/config.js"></script>
@@ -687,6 +798,7 @@
     <script src="js/contratos.js"></script>
     <script src="js/veiculacoes.js"></script>
     <script src="js/arquivos.js"></script>
+    <script src="js/usuarios.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

@@ -557,7 +557,7 @@ body {
   gap: 0.75rem;
 }
 
-.pagination-bar #contratos-page-info {
+.pagination-bar .page-info {
   min-width: 140px;
   text-align: center;
   color: var(--gray);
@@ -717,6 +717,16 @@ body {
 .badge-secondary {
   background: #f1f5f9;
   color: #475569;
+}
+
+.badge-admin {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-operador {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 /* Progress Bar */

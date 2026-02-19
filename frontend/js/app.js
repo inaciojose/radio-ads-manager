@@ -45,6 +45,14 @@ function updateAuthUI() {
   document.querySelectorAll("[data-requires-write='true']").forEach((el) => {
     el.style.display = canWrite() ? "inline-flex" : "none"
   })
+
+  document.querySelectorAll("[data-admin-only='true']").forEach((el) => {
+    el.style.display = canManageUsers() ? "inline-flex" : "none"
+  })
+
+  if (!canManageUsers() && appState.currentPage === "usuarios") {
+    showPage("dashboard")
+  }
 }
 
 async function restoreSession() {
@@ -127,6 +135,11 @@ async function checkAPIStatus() {
 
 // Navegação entre páginas
 function showPage(pageName, evt) {
+  if (pageName === "usuarios" && !canManageUsers()) {
+    showToast("Acesso restrito a administradores", "warning")
+    return
+  }
+
   // Atualizar estado
   appState.currentPage = pageName
 
@@ -146,6 +159,7 @@ function showPage(pageName, evt) {
     contratos: "Contratos",
     veiculacoes: "Veiculações",
     arquivos: "Arquivos",
+    usuarios: "Usuários",
   }
   document.getElementById("page-title").textContent = titles[pageName]
 
@@ -176,6 +190,13 @@ async function loadPageData(pageName) {
       break
     case "arquivos":
       loadArquivos()
+      break
+    case "usuarios":
+      if (canManageUsers()) {
+        loadUsuarios()
+      } else {
+        showToast("Acesso restrito a administradores", "warning")
+      }
       break
   }
 }

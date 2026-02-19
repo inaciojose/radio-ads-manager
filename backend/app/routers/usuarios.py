@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import ROLE_ADMIN, hash_password, require_roles
+from app.auth import ROLE_ADMIN, get_current_user, hash_password, require_roles
 from app.database import get_db
 
 
@@ -58,6 +58,14 @@ def atualizar_usuario(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "username" in update_data and update_data["username"] != db_user.username:
+        username_existente = db.query(models.Usuario).filter(
+            models.Usuario.username == update_data["username"],
+            models.Usuario.id != usuario_id,
+        ).first()
+        if username_existente:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username já cadastrado")
+
     if "password" in update_data:
         update_data["password_hash"] = hash_password(update_data.pop("password"))
 
@@ -67,3 +75,34 @@ def atualizar_usuario(
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+@router.delete(
+    "/{usuario_id}",
+    response_model=schemas.MessageResponse,
+    dependencies=[Depends(require_roles(ROLE_ADMIN))],
+)
+def deletar_usuario(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user),
+):
+    db_user = db.query(models.Usuario).filter(models.Usuario.id == usuario_id).first()
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
+
+    if db_user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Não é possível excluir seu próprio usuário")
+
+    if db_user.role == ROLE_ADMIN:
+        total_admins = db.query(models.Usuario).filter(
+            models.Usuario.role == ROLE_ADMIN,
+            models.Usuario.ativo == True,  # noqa: E712
+            models.Usuario.id != db_user.id,
+        ).count()
+        if total_admins == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Não é possível remover o último admin ativo")
+
+    db.delete(db_user)
+    db.commit()
+    return {"message": "Usuário removido com sucesso", "success": True}

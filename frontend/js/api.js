@@ -167,6 +167,12 @@ class API {
     })
   }
 
+  async deleteUsuario(id) {
+    return this.request(`/usuarios/${id}`, {
+      method: "DELETE",
+    })
+  }
+
   // ============================================
   // Contratos
   // ============================================

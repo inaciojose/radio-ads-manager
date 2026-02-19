@@ -7,8 +7,10 @@ import pytest
 os.environ["DATABASE_URL"] = "sqlite:///./test_radio_ads.db"
 
 from app import models, schemas
+from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
 from app.main import health_check
+from app.routers import auth as auth_router
 from app.routers import clientes as clientes_router
 from app.routers import contratos as contratos_router
 from app.routers import veiculacoes as veiculacoes_router
@@ -57,6 +59,27 @@ def test_criar_e_listar_clientes(db):
     assert len(clientes) == 1
     assert cliente.id == clientes[0].id
     assert clientes[0].nome == "Cliente Teste"
+
+
+def test_login_retorna_usuario_com_campos_completos(db):
+    user = models.Usuario(
+        username="admin_test",
+        nome="Administrador Teste",
+        password_hash=hash_password("segredo123"),
+        role="admin",
+        ativo=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    payload = schemas.LoginRequest(username="admin_test", password="segredo123")
+    resposta = auth_router.login(payload, db=db)
+
+    assert resposta["access_token"]
+    assert resposta["token_type"] == "bearer"
+    assert isinstance(resposta["usuario"], models.Usuario)
+    assert resposta["usuario"].created_at is not None
 
 
 def test_reprocessamento_force_nao_duplica_contagem(db):
