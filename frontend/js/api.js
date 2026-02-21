@@ -9,6 +9,128 @@ class API {
     this.token = window.localStorage.getItem("RADIO_ADS_ACCESS_TOKEN") || null
   }
 
+  getFieldLabel(path) {
+    const labels = {
+      username: "Username",
+      nome: "Nome",
+      password: "Senha",
+      role: "Perfil",
+      ativo: "Status",
+      cnpj_cpf: "CNPJ/CPF",
+      email: "Email",
+      telefone: "Telefone",
+      endereco: "Endereço",
+      status: "Status",
+      status_nf: "Status NF",
+      status_contrato: "Status do contrato",
+      data_inicio: "Data início",
+      data_fim: "Data fim",
+      data_emissao: "Data emissão",
+      data_pagamento: "Data pagamento",
+      competencia: "Competência",
+      frequencia: "Frequência",
+      valor: "Valor",
+      valor_total: "Valor total",
+      quantidade_contratada: "Quantidade contratada",
+      quantidade_diaria_meta: "Meta diária",
+      quantidade_meta: "Quantidade da meta",
+      tipo_programa: "Tipo de programa",
+      arquivo_audio_id: "Arquivo de áudio",
+      cliente_id: "Cliente",
+      numero_nf: "Número da NF",
+      numero: "Número",
+    }
+    return labels[path] || path
+  }
+
+  normalizeValidationMessage(message = "") {
+    const raw = String(message || "")
+    const lower = raw.toLowerCase()
+
+    if (lower.includes("field required")) return "Campo obrigatório."
+
+    const minLen = raw.match(/at least (\d+) characters/i)
+    if (minLen) return `Deve ter no mínimo ${minLen[1]} caracteres.`
+
+    const maxLen = raw.match(/at most (\d+) characters/i)
+    if (maxLen) return `Deve ter no máximo ${maxLen[1]} caracteres.`
+
+    const greaterEq = raw.match(/greater than or equal to ([\d.-]+)/i)
+    if (greaterEq) return `Deve ser maior ou igual a ${greaterEq[1]}.`
+
+    const greater = raw.match(/greater than ([\d.-]+)/i)
+    if (greater) return `Deve ser maior que ${greater[1]}.`
+
+    const lowerEq = raw.match(/less than or equal to ([\d.-]+)/i)
+    if (lowerEq) return `Deve ser menor ou igual a ${lowerEq[1]}.`
+
+    if (lower.includes("valid date")) return "Data inválida."
+    if (lower.includes("valid integer")) return "Número inteiro inválido."
+    if (lower.includes("valid number")) return "Número inválido."
+    if (lower.includes("valid boolean")) return "Valor inválido (esperado verdadeiro/falso)."
+    if (lower.includes("valid string")) return "Texto inválido."
+
+    return raw || "Valor inválido."
+  }
+
+  notifyAuthRequired(message) {
+    if (typeof window === "undefined" || !window.dispatchEvent) return
+    window.dispatchEvent(
+      new CustomEvent("radio-ads-auth-required", {
+        detail: { message },
+      }),
+    )
+  }
+
+  formatErrorMessage(status, payload) {
+    const detail = payload?.detail
+    const fallback = payload?.message || `HTTP ${status}: ${payload?.statusText || "Erro na requisição"}`
+    const codeSuffix = payload?.code ? ` (Código: ${payload.code})` : ""
+
+    if (status === 401) {
+      return "Sessão expirada ou inválida. Faça login novamente."
+    }
+    if (status === 403) {
+      return "Você não tem permissão para realizar esta ação."
+    }
+    if (status >= 500) {
+      const errorId = payload?.error_id ? ` Código: ${payload.error_id}` : ""
+      return `Erro interno do servidor.${errorId}`
+    }
+
+    if (!detail) return fallback
+
+    if (typeof detail === "string") return detail + codeSuffix
+
+    if (detail && typeof detail === "object" && detail.message) {
+      return String(detail.message) + codeSuffix
+    }
+
+    if (Array.isArray(detail)) {
+      const itens = detail
+        .map((item) => {
+          const locParts = Array.isArray(item?.loc) ? item.loc : []
+          const cleanLoc = locParts.filter((p) => !["body", "query", "path"].includes(String(p)))
+          const fieldName = cleanLoc.length ? this.getFieldLabel(String(cleanLoc[cleanLoc.length - 1])) : null
+          const msg = this.normalizeValidationMessage(item?.msg || "")
+          if (fieldName && msg) return `${fieldName}: ${msg}`
+          return msg || null
+        })
+        .filter(Boolean)
+      return itens.length ? itens.join(" | ") : fallback
+    }
+
+    if (typeof detail === "object") {
+      try {
+        return JSON.stringify(detail) + codeSuffix
+      } catch {
+        return fallback
+      }
+    }
+
+    return String(detail)
+  }
+
   /**
    * Faz uma requisição HTTP
    */
@@ -36,10 +158,16 @@ class API {
       const response = await fetch(url, config)
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({
-          detail: `HTTP ${response.status}: ${response.statusText}`,
+        const errorPayload = await response.json().catch(() => ({
+          message: `HTTP ${response.status}: ${response.statusText}`,
+          statusText: response.statusText,
         }))
-        throw new Error(error.detail || error.message || "Erro na requisição")
+        const readableMessage = this.formatErrorMessage(response.status, errorPayload)
+        if (response.status === 401) {
+          this.setAuthToken(null)
+          this.notifyAuthRequired(readableMessage)
+        }
+        throw new Error(readableMessage)
       }
 
       if (response.status === 204) return null
@@ -47,6 +175,9 @@ class API {
     } catch (error) {
       if (error.name === "AbortError") {
         throw new Error(`Tempo limite excedido (${timeoutMs}ms)`)
+      }
+      if (error instanceof TypeError) {
+        throw new Error("Não foi possível conectar à API. Verifique sua conexão e tente novamente.")
       }
       console.error("API Error:", error)
       throw error
@@ -338,6 +469,10 @@ class API {
 
   async getResumoMetaDiariaHoje() {
     return this.request("/contratos/resumo/meta-diaria-hoje")
+  }
+
+  async getDashboardResumo() {
+    return this.request("/contratos/resumo/dashboard")
   }
 
   async getContratosCliente(clienteId) {

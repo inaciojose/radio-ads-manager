@@ -11,6 +11,21 @@ const usuariosState = {
   hasNext: false,
 }
 
+function getMensagemErroUsuario(error) {
+  const raw = String(error?.message || "")
+  if (!raw) return "Erro ao salvar usuário"
+  if (raw.includes("body.password") || raw.toLowerCase().includes("at least 6")) {
+    return "Senha inválida: informe pelo menos 6 caracteres."
+  }
+  if (raw.includes("body.username")) {
+    return "Username inválido: verifique o tamanho mínimo e caracteres informados."
+  }
+  if (raw.includes("body.nome")) {
+    return "Nome inválido: informe pelo menos 3 caracteres."
+  }
+  return raw
+}
+
 async function loadUsuarios(page = 1) {
   if (!canManageUsers()) return
 
@@ -157,6 +172,16 @@ async function saveUsuario() {
     return
   }
 
+  if (!isEdit && password.length < 6) {
+    showToast("Senha deve ter pelo menos 6 caracteres", "warning")
+    return
+  }
+
+  if (isEdit && password && password.length < 6) {
+    showToast("Nova senha deve ter pelo menos 6 caracteres", "warning")
+    return
+  }
+
   try {
     showLoading()
     if (isEdit) {
@@ -175,7 +200,7 @@ async function saveUsuario() {
     closeModal()
     await loadUsuarios(usuariosState.page)
   } catch (error) {
-    showToast(error.message || "Erro ao salvar usuário", "error")
+    showToast(getMensagemErroUsuario(error), "error")
   } finally {
     hideLoading()
   }
