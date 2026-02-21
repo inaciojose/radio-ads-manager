@@ -27,11 +27,23 @@
           <i class="fas fa-chart-line"></i>
           <span>Dashboard</span>
         </a>
-        <a href="#clientes" class="nav-item" onclick="showPage('clientes', event)">
+        <a
+          href="#clientes"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('clientes', event)"
+        >
           <i class="fas fa-users"></i>
           <span>Clientes</span>
         </a>
-        <a href="#contratos" class="nav-item" onclick="showPage('contratos', event)">
+        <a
+          href="#contratos"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('contratos', event)"
+        >
           <i class="fas fa-file-contract"></i>
           <span>Contratos</span>
         </a>
@@ -43,17 +55,30 @@
           <i class="fas fa-broadcast-tower"></i>
           <span>Veiculações</span>
         </a>
-        <a href="#arquivos" class="nav-item" onclick="showPage('arquivos', event)">
+        <a
+          href="#arquivos"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('arquivos', event)"
+        >
           <i class="fas fa-folder-open"></i>
           <span>Arquivos</span>
         </a>
-        <a href="#notas-fiscais" class="nav-item" onclick="showPage('notas-fiscais', event)">
+        <a
+          href="#notas-fiscais"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('notas-fiscais', event)"
+        >
           <i class="fas fa-file-invoice"></i>
           <span>Notas Fiscais</span>
         </a>
         <a
           href="#usuarios"
           class="nav-item"
+          data-auth-only="true"
           data-admin-only="true"
           style="display: none"
           onclick="showPage('usuarios', event)"
@@ -112,7 +137,7 @@
               <div class="stat-icon blue">
                 <i class="fas fa-users"></i>
               </div>
-              <div class="stat-content">
+              <div class="stat-content" id="stat-clientes-content">
                 <h3 id="stat-clientes">-</h3>
                 <p>Clientes Ativos</p>
               </div>
@@ -122,7 +147,7 @@
               <div class="stat-icon green">
                 <i class="fas fa-file-contract"></i>
               </div>
-              <div class="stat-content">
+              <div class="stat-content" id="stat-contratos-content">
                 <h3 id="stat-contratos">-</h3>
                 <p>Contratos Ativos</p>
               </div>
@@ -132,7 +157,7 @@
               <div class="stat-icon orange">
                 <i class="fas fa-broadcast-tower"></i>
               </div>
-              <div class="stat-content">
+              <div class="stat-content" id="stat-veiculacoes-content">
                 <h3 id="stat-veiculacoes">-</h3>
                 <p>Veiculações Hoje</p>
               </div>
@@ -142,7 +167,7 @@
               <div class="stat-icon red">
                 <i class="fas fa-file-invoice"></i>
               </div>
-              <div class="stat-content">
+              <div class="stat-content" id="stat-nf-pendentes-content">
                 <h3 id="stat-nf-pendentes">-</h3>
                 <p>NFs Pendentes</p>
               </div>
@@ -152,7 +177,7 @@
               <div class="stat-icon info">
                 <i class="fas fa-bullseye"></i>
               </div>
-              <div class="stat-content">
+              <div class="stat-content" id="stat-meta-diaria-content">
                 <h3 id="stat-meta-diaria">-</h3>
                 <p>Meta Diária (Hoje)</p>
                 <small id="stat-meta-diaria-detail">-</small>

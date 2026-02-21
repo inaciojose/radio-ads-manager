@@ -323,6 +323,103 @@ def resumo_meta_diaria_hoje(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/resumo/dashboard")
+def resumo_dashboard(db: Session = Depends(get_db)):
+    hoje = date.today()
+    inicio_dia = datetime.combine(hoje, datetime.min.time())
+    fim_dia = datetime.combine(hoje, datetime.max.time())
+
+    clientes_ativos = db.query(models.Cliente).filter(models.Cliente.status == "ativo").count()
+    contratos_ativos = (
+        db.query(models.Contrato)
+        .filter(models.Contrato.status_contrato == "ativo")
+        .count()
+    )
+    nf_pendentes = (
+        db.query(models.Contrato)
+        .filter(
+            models.Contrato.status_contrato == "ativo",
+            models.Contrato.status_nf == "pendente",
+        )
+        .count()
+    )
+
+    total_veiculacoes = db.query(models.Veiculacao).filter(
+        models.Veiculacao.data_hora.between(inicio_dia, fim_dia)
+    ).count()
+
+    por_tipo = (
+        db.query(models.Veiculacao.tipo_programa, func.count(models.Veiculacao.id))
+        .filter(models.Veiculacao.data_hora.between(inicio_dia, fim_dia))
+        .group_by(models.Veiculacao.tipo_programa)
+        .all()
+    )
+    por_tipo_programa = {tipo or "não definido": total for tipo, total in por_tipo}
+
+    top_clientes_raw = (
+        db.query(
+            models.ArquivoAudio.cliente_id,
+            models.Cliente.nome,
+            func.count(models.Veiculacao.id).label("total"),
+        )
+        .select_from(models.Veiculacao)
+        .join(models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id)
+        .join(models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id)
+        .filter(models.Veiculacao.data_hora.between(inicio_dia, fim_dia))
+        .group_by(models.ArquivoAudio.cliente_id, models.Cliente.nome)
+        .order_by(func.count(models.Veiculacao.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_10_clientes = [
+        {"cliente_id": cliente_id, "cliente_nome": cliente_nome, "total": total}
+        for cliente_id, cliente_nome, total in top_clientes_raw
+    ]
+
+    recentes_raw = (
+        db.query(
+            models.Veiculacao.id,
+            models.Veiculacao.data_hora,
+            models.Veiculacao.frequencia,
+            models.Veiculacao.tipo_programa,
+            models.Veiculacao.processado,
+            models.ArquivoAudio.nome_arquivo.label("arquivo_nome"),
+            models.Cliente.nome.label("cliente_nome"),
+        )
+        .select_from(models.Veiculacao)
+        .join(models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id)
+        .join(models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id)
+        .filter(models.Veiculacao.data_hora.between(inicio_dia, fim_dia))
+        .order_by(models.Veiculacao.data_hora.desc())
+        .limit(10)
+        .all()
+    )
+    recentes = [
+        {
+            "id": item.id,
+            "data_hora": item.data_hora,
+            "frequencia": item.frequencia,
+            "tipo_programa": item.tipo_programa,
+            "processado": item.processado,
+            "arquivo_nome": item.arquivo_nome,
+            "cliente_nome": item.cliente_nome,
+        }
+        for item in recentes_raw
+    ]
+
+    return {
+        "data": hoje,
+        "clientes_ativos": clientes_ativos,
+        "contratos_ativos": contratos_ativos,
+        "nf_pendentes": nf_pendentes,
+        "total_veiculacoes": total_veiculacoes,
+        "por_tipo_programa": por_tipo_programa,
+        "top_10_clientes": top_10_clientes,
+        "meta_diaria": resumo_meta_diaria_hoje(db),
+        "recentes": recentes,
+    }
+
+
 @router.get("/{contrato_id}/resumo/monitoramento")
 def resumo_monitoramento_contrato(
     contrato_id: int,

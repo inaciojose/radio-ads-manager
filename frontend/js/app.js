@@ -10,12 +10,46 @@ const appState = {
   role: "convidado",
 }
 
+const pollingState = {
+  healthTimerId: null,
+  pageTimerId: null,
+  healthRunning: false,
+  pageRunning: false,
+}
+
 function canWrite() {
   return appState.role === "admin" || appState.role === "operador"
 }
 
 function canManageUsers() {
   return appState.role === "admin"
+}
+
+function isPublicPage(pageName) {
+  return pageName === "dashboard" || pageName === "veiculacoes"
+}
+
+function canAccessPage(pageName) {
+  if (isPublicPage(pageName)) return true
+  if (pageName === "usuarios") return canManageUsers()
+  return Boolean(appState.user)
+}
+
+function requirePageAccess(pageName) {
+  if (canAccessPage(pageName)) return true
+
+  if (!appState.user) {
+    showToast("Faça login para acessar esta página.", "warning")
+    showLoginModal()
+    return false
+  }
+
+  if (pageName === "usuarios") {
+    showToast("Acesso restrito a administradores", "warning")
+    return false
+  }
+
+  return false
 }
 
 function requireWriteAccess(message = "Esta ação exige login.") {
@@ -46,11 +80,15 @@ function updateAuthUI() {
     el.style.display = canWrite() ? "inline-flex" : "none"
   })
 
+  document.querySelectorAll("[data-auth-only='true']").forEach((el) => {
+    el.style.display = appState.user ? "inline-flex" : "none"
+  })
+
   document.querySelectorAll("[data-admin-only='true']").forEach((el) => {
     el.style.display = canManageUsers() ? "inline-flex" : "none"
   })
 
-  if (!canManageUsers() && appState.currentPage === "usuarios") {
+  if (!canAccessPage(appState.currentPage)) {
     showPage("dashboard")
   }
 }
@@ -101,6 +139,7 @@ async function login() {
     closeModal()
     showToast("Sessão iniciada", "success")
     await loadPageData(appState.currentPage)
+    restartPolling()
   } catch (error) {
     showToast(error.message || "Erro ao autenticar", "error")
   } finally {
@@ -114,7 +153,12 @@ function logout() {
   appState.role = "convidado"
   updateAuthUI()
   showToast("Sessão finalizada", "info")
-  loadPageData(appState.currentPage)
+  if (!canAccessPage(appState.currentPage)) {
+    showPage("dashboard")
+  } else {
+    loadPageData(appState.currentPage)
+  }
+  restartPolling()
 }
 
 // Verificar status da API
@@ -135,8 +179,7 @@ async function checkAPIStatus() {
 
 // Navegação entre páginas
 function showPage(pageName, evt) {
-  if (pageName === "usuarios" && !canManageUsers()) {
-    showToast("Acesso restrito a administradores", "warning")
+  if (!requirePageAccess(pageName)) {
     return
   }
 
@@ -172,37 +215,102 @@ function showPage(pageName, evt) {
 
   // Carregar dados da página
   loadPageData(pageName)
+  restartPolling()
 }
 
 // Carregar dados da página
 async function loadPageData(pageName) {
+  if (!canAccessPage(pageName)) {
+    return loadDashboard()
+  }
+
   switch (pageName) {
     case "dashboard":
-      loadDashboard()
-      break
+      return loadDashboard()
     case "clientes":
-      loadClientes()
-      break
+      return loadClientes()
     case "contratos":
-      loadContratos()
-      break
+      return loadContratos()
     case "notas-fiscais":
-      loadNotasFiscais()
-      break
+      return loadNotasFiscais()
     case "veiculacoes":
-      loadVeiculacoes()
-      break
+      return loadVeiculacoes()
     case "arquivos":
-      loadArquivos()
-      break
+      return loadArquivos()
     case "usuarios":
       if (canManageUsers()) {
-        loadUsuarios()
+        return loadUsuarios()
       } else {
         showToast("Acesso restrito a administradores", "warning")
       }
       break
   }
+}
+
+function clearPollingTimers() {
+  if (pollingState.healthTimerId) {
+    clearTimeout(pollingState.healthTimerId)
+    pollingState.healthTimerId = null
+  }
+  if (pollingState.pageTimerId) {
+    clearTimeout(pollingState.pageTimerId)
+    pollingState.pageTimerId = null
+  }
+}
+
+function getHealthCheckInterval() {
+  return appState.apiOnline
+    ? CONFIG.HEALTH_CHECK_INTERVAL_ONLINE
+    : CONFIG.HEALTH_CHECK_INTERVAL_OFFLINE
+}
+
+function getPageRefreshInterval(pageName) {
+  return CONFIG.PAGE_REFRESH_INTERVALS?.[pageName] || null
+}
+
+function scheduleHealthPolling() {
+  if (document.hidden) return
+
+  const interval = getHealthCheckInterval()
+  if (!interval) return
+
+  pollingState.healthTimerId = setTimeout(async () => {
+    if (!pollingState.healthRunning) {
+      pollingState.healthRunning = true
+      try {
+        await checkAPIStatus()
+      } finally {
+        pollingState.healthRunning = false
+      }
+    }
+    scheduleHealthPolling()
+  }, interval)
+}
+
+function schedulePagePolling() {
+  if (document.hidden) return
+
+  const interval = getPageRefreshInterval(appState.currentPage)
+  if (!interval) return
+
+  pollingState.pageTimerId = setTimeout(async () => {
+    if (!pollingState.pageRunning) {
+      pollingState.pageRunning = true
+      try {
+        await loadPageData(appState.currentPage)
+      } finally {
+        pollingState.pageRunning = false
+      }
+    }
+    schedulePagePolling()
+  }, interval)
+}
+
+function restartPolling() {
+  clearPollingTimers()
+  if (document.hidden) return
+  scheduleHealthPolling()
+  schedulePagePolling()
 }
 
 // Refresh página atual
@@ -227,22 +335,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   await restoreSession()
 
   // Carregar dashboard
-  loadDashboard()
-
-  // Auto-refresh a cada 30 segundos (se habilitado)
-  if (CONFIG.AUTO_REFRESH_INTERVAL) {
-    setInterval(() => {
-      if (
-        appState.currentPage === "dashboard" ||
-        appState.currentPage === "veiculacoes"
-      ) {
-        loadPageData(appState.currentPage)
-      }
-    }, CONFIG.AUTO_REFRESH_INTERVAL)
-  }
+  await loadDashboard()
+  restartPolling()
 
   console.log("✅ Aplicação carregada")
 })
 
-// Verificar API periodicamente
-setInterval(checkAPIStatus, 30000)
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearPollingTimers()
+    return
+  }
+
+  checkAPIStatus()
+  loadPageData(appState.currentPage)
+  restartPolling()
+})
+
+window.addEventListener("radio-ads-auth-required", (event) => {
+  if (appState.user) {
+    appState.user = null
+    appState.role = "convidado"
+    updateAuthUI()
+  }
+
+  if (!isPublicPage(appState.currentPage)) {
+    showPage("dashboard")
+  }
+
+  if (!document.getElementById("modal-login")?.classList.contains("active")) {
+    showLoginModal()
+  }
+})

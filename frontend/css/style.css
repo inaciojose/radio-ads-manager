@@ -654,6 +654,11 @@ body {
   color: var(--gray);
 }
 
+.blur-unauth {
+  filter: blur(6px);
+  user-select: none;
+}
+
 .faturamento-mensal-actions {
   display: flex;
   gap: 0.5rem;

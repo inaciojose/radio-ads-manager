@@ -166,6 +166,7 @@ async function hydrateClientesNomes(contratos) {
 function renderContratos(items, clientesPorId) {
   const tbody = document.querySelector("#table-contratos tbody")
   if (!tbody) return
+  const isUnauthenticated = !appState.user
 
   if (!items.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center">Sem contratos</td></tr>'
@@ -188,6 +189,7 @@ function renderContratos(items, clientesPorId) {
           : ""
 
       const monitoramentoResumo = monitoramentoResumoPorContrato[c.id]
+      const sensitiveClass = isUnauthenticated ? "blur-unauth" : ""
 
       return `
       <tr>
@@ -198,11 +200,13 @@ function renderContratos(items, clientesPorId) {
           ${!c.data_fim ? '<div><span class="badge badge-info">Recorrente</span></div>' : ""}
         </td>
         <td>${getProgressStack(monitoramentoResumo)}</td>
-        <td>${formatCurrency(c.valor_total)}</td>
+        <td><span class="${sensitiveClass}">${formatCurrency(c.valor_total)}</span></td>
         <td>
-          ${getStatusBadge(c.status_nf, "nf")}
-          <div><small>Dinâmica: ${c.nf_dinamica === "mensal" ? "Mensal" : "Única"}</small></div>
-          ${resumoMensalHtml}
+          <div class="${sensitiveClass}">
+            ${getStatusBadge(c.status_nf, "nf")}
+            <div><small>Dinâmica: ${c.nf_dinamica === "mensal" ? "Mensal" : "Única"}</small></div>
+            ${resumoMensalHtml}
+          </div>
         </td>
         <td>${getStatusBadge(c.status_contrato, "contrato")}</td>
         <td>

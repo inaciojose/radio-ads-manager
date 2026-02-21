@@ -17,6 +17,14 @@ const CONFIG = {
   // Intervalo de atualização automática (em milissegundos)
   AUTO_REFRESH_INTERVAL: 30000, // 30 segundos
 
+  // Polling adaptativo
+  HEALTH_CHECK_INTERVAL_ONLINE: 60000, // 60 segundos
+  HEALTH_CHECK_INTERVAL_OFFLINE: 30000, // 30 segundos
+  PAGE_REFRESH_INTERVALS: {
+    dashboard: 30000,
+    veiculacoes: 30000,
+  },
+
   // Timeout das requisições
   REQUEST_TIMEOUT: 10000, // 10 segundos
 
