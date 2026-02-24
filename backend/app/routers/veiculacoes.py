@@ -31,14 +31,23 @@ router = APIRouter(
 
 def _resolver_veiculacao_existente_query(
     db: Session,
-    arquivo_audio_id: int,
+    arquivo_audio_id: Optional[int],
     data_hora: datetime,
     frequencia: Optional[str],
+    nome_arquivo_raw: Optional[str] = None,
 ):
-    query_existente = db.query(models.Veiculacao).filter(
-        models.Veiculacao.arquivo_audio_id == arquivo_audio_id,
-        models.Veiculacao.data_hora == data_hora,
-    )
+    if arquivo_audio_id is not None:
+        query_existente = db.query(models.Veiculacao).filter(
+            models.Veiculacao.arquivo_audio_id == arquivo_audio_id,
+            models.Veiculacao.data_hora == data_hora,
+        )
+    else:
+        # Arquivo não cadastrado: deduplica por nome bruto + data + frequência
+        query_existente = db.query(models.Veiculacao).filter(
+            models.Veiculacao.arquivo_audio_id.is_(None),
+            models.Veiculacao.nome_arquivo_raw == nome_arquivo_raw,
+            models.Veiculacao.data_hora == data_hora,
+        )
     if frequencia is None:
         query_existente = query_existente.filter(models.Veiculacao.frequencia.is_(None))
     else:
@@ -50,20 +59,22 @@ def _criar_ou_buscar_veiculacao(
     db: Session,
     payload: schemas.VeiculacaoCreate,
 ):
-    arquivo = db.query(models.ArquivoAudio).filter(
-        models.ArquivoAudio.id == payload.arquivo_audio_id
-    ).first()
-    if not arquivo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Arquivo com ID {payload.arquivo_audio_id} não encontrado"
-        )
+    if payload.arquivo_audio_id is not None:
+        arquivo = db.query(models.ArquivoAudio).filter(
+            models.ArquivoAudio.id == payload.arquivo_audio_id
+        ).first()
+        if not arquivo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Arquivo com ID {payload.arquivo_audio_id} não encontrado"
+            )
 
     query_existente = _resolver_veiculacao_existente_query(
         db=db,
         arquivo_audio_id=payload.arquivo_audio_id,
         data_hora=payload.data_hora,
         frequencia=payload.frequencia,
+        nome_arquivo_raw=payload.nome_arquivo_raw,
     )
     existente = query_existente.first()
     if existente:
@@ -97,6 +108,7 @@ def listar_veiculacoes(
     frequencia: Optional[str] = Query(None, description="Filtrar por frequência (102.7/104.7)"),
     tipo_programa: Optional[str] = Query(None, description="Filtrar por tipo de programa"),
     processado: Optional[bool] = Query(None, description="Filtrar por status de processamento"),
+    sem_contrato: Optional[bool] = Query(None, description="Filtrar veiculações sem contrato vinculado"),
     db: Session = Depends(get_db)
 ):
     """
@@ -137,7 +149,13 @@ def listar_veiculacoes(
     
     if processado is not None:
         query = query.filter(models.Veiculacao.processado == processado)
-    
+
+    if sem_contrato is not None:
+        if sem_contrato:
+            query = query.filter(models.Veiculacao.contrato_id.is_(None))
+        else:
+            query = query.filter(models.Veiculacao.contrato_id.isnot(None))
+
     # Ordenar por data (mais recentes primeiro)
     veiculacoes = query.order_by(models.Veiculacao.data_hora.desc()).offset(skip).limit(limit).all()
     
@@ -583,20 +601,24 @@ def listar_veiculacoes_detalhadas(
     inicio_dia = datetime.combine(data, datetime.min.time())
     fim_dia = datetime.combine(data, datetime.max.time())
     
-    # Query com joins para pegar todas as informações
+    # Query com joins para pegar todas as informações.
+    # Usa outerjoin em todos os relacionamentos para incluir veiculações
+    # de arquivos não cadastrados (nome_arquivo_raw preenchido).
     veiculacoes = db.query(
         models.Veiculacao.id,
         models.Veiculacao.data_hora,
         models.Veiculacao.frequencia,
         models.Veiculacao.tipo_programa,
         models.Veiculacao.processado,
+        models.Veiculacao.contabilizada,
+        models.Veiculacao.nome_arquivo_raw,
         models.ArquivoAudio.nome_arquivo.label('arquivo_nome'),
         models.ArquivoAudio.titulo.label('arquivo_titulo'),
         models.Cliente.nome.label('cliente_nome'),
         models.Contrato.numero_contrato
-    ).join(
+    ).outerjoin(
         models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id
-    ).join(
+    ).outerjoin(
         models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id
     ).outerjoin(
         models.Contrato, models.Veiculacao.contrato_id == models.Contrato.id
@@ -605,7 +627,7 @@ def listar_veiculacoes_detalhadas(
     ).order_by(
         models.Veiculacao.data_hora.desc()
     ).offset(skip).limit(limit).all()
-    
+
     # Converter para lista de dicts
     resultado = [
         {
@@ -614,6 +636,8 @@ def listar_veiculacoes_detalhadas(
             "frequencia": v.frequencia,
             "tipo_programa": v.tipo_programa,
             "processado": v.processado,
+            "contabilizada": v.contabilizada,
+            "nome_arquivo_raw": v.nome_arquivo_raw,
             "arquivo_nome": v.arquivo_nome,
             "arquivo_titulo": v.arquivo_titulo,
             "cliente_nome": v.cliente_nome,
