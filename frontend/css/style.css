@@ -942,6 +942,51 @@ body {
 }
 
 /* ============================================
+   FREQUENCY TABS (Veiculações)
+   ============================================ */
+
+.freq-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem 0;
+  border-bottom: 1px solid var(--gray-light);
+}
+
+.freq-tab {
+  padding: 0.4rem 1.1rem;
+  border: 1px solid var(--gray-light);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--gray-lighter);
+  color: var(--gray);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+
+.freq-tab:hover {
+  background: #e2e8f0;
+  color: var(--dark);
+}
+
+.freq-tab.active {
+  background: var(--white);
+  color: var(--primary);
+  border-color: var(--primary);
+  border-bottom-color: var(--white);
+  font-weight: 600;
+}
+
+.row-sem-contrato td {
+  background-color: rgba(245, 158, 11, 0.07);
+}
+
+.row-nao-cadastrado td {
+  background-color: rgba(239, 68, 68, 0.06);
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 

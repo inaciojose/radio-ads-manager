@@ -2,6 +2,9 @@
  * veiculacoes.js - Listagem e processamento.
  */
 
+let _veiculacoesAll = []
+let _activeFreq = null
+
 async function loadVeiculacoes() {
   const data = document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
   if (document.getElementById("filter-veiculacao-data")) {
@@ -11,7 +14,8 @@ async function loadVeiculacoes() {
   try {
     showLoading()
     const items = await api.getVeiculacoesDetalhadas({ data, limit: 500 })
-    renderVeiculacoes(items)
+    _veiculacoesAll = items
+    renderVeiculacoes(_veiculacoesAll)
   } catch (error) {
     showToast(error.message || "Erro ao carregar veiculacoes", "error")
   } finally {
@@ -19,28 +23,62 @@ async function loadVeiculacoes() {
   }
 }
 
+function setFreqTab(freq, btn) {
+  _activeFreq = freq
+  document.querySelectorAll(".freq-tab").forEach((b) => b.classList.remove("active"))
+  btn.classList.add("active")
+  renderVeiculacoes(_veiculacoesAll)
+}
+
 function renderVeiculacoes(items) {
   const tbody = document.querySelector("#table-veiculacoes tbody")
   if (!tbody) return
 
-  if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Sem veiculacoes</td></tr>'
+  const filtered = _activeFreq ? items.filter((v) => v.frequencia === _activeFreq) : items
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Sem veiculacoes</td></tr>'
     return
   }
 
-  tbody.innerHTML = items
-    .map(
-      (v) => `
-      <tr>
+  tbody.innerHTML = filtered
+    .map((v) => {
+      const naoCadastrado = !v.arquivo_nome  // arquivo não está no sistema
+      const semContrato = !naoCadastrado && v.processado && !v.contabilizada
+
+      let rowClass = ""
+      if (naoCadastrado) rowClass = ' class="row-nao-cadastrado"'
+      else if (semContrato) rowClass = ' class="row-sem-contrato"'
+
+      const arquivoCell = naoCadastrado
+        ? `<span title="Arquivo não cadastrado no sistema">${escapeHtml(v.nome_arquivo_raw || "-")}</span>`
+        : escapeHtml(v.arquivo_nome || "-")
+
+      const clienteCell = naoCadastrado
+        ? `<span class="text-muted">Não cadastrado</span>`
+        : escapeHtml(v.cliente_nome || "-")
+
+      let contratoCell
+      if (naoCadastrado) {
+        contratoCell = `<span class="badge badge-danger">Não identificado</span>`
+      } else if (semContrato) {
+        contratoCell = `<span class="badge badge-warning">Sem contrato</span>`
+      } else {
+        contratoCell = escapeHtml(v.numero_contrato || "-")
+      }
+
+      return `
+      <tr${rowClass}>
         <td>${formatTime(v.data_hora)}</td>
-        <td>${escapeHtml(v.cliente_nome || "-")}</td>
-        <td>${escapeHtml(v.arquivo_nome || "-")}</td>
+        <td>${escapeHtml(v.frequencia || "-")}</td>
+        <td>${clienteCell}</td>
+        <td>${arquivoCell}</td>
         <td>${escapeHtml(v.tipo_programa || "-")}</td>
-        <td>${escapeHtml(v.numero_contrato || "-")}</td>
+        <td>${contratoCell}</td>
         <td>${getStatusBadge(String(v.processado), "processado")}</td>
       </tr>
-    `,
-    )
+    `
+    })
     .join("")
 }
 

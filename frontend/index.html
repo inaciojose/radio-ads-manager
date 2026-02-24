@@ -352,11 +352,17 @@
           </div>
 
           <div class="card">
+            <div class="freq-tabs">
+              <button class="freq-tab active" onclick="setFreqTab(null, this)">Todas</button>
+              <button class="freq-tab" onclick="setFreqTab('102.7', this)">102.7</button>
+              <button class="freq-tab" onclick="setFreqTab('104.7', this)">104.7</button>
+            </div>
             <div class="table-responsive">
               <table class="table" id="table-veiculacoes">
                 <thead>
                   <tr>
                     <th>Horário</th>
+                    <th>Freq.</th>
                     <th>Cliente</th>
                     <th>Arquivo</th>
                     <th>Programa</th>
@@ -366,7 +372,7 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td colspan="6" class="text-center">Carregando...</td>
+                    <td colspan="7" class="text-center">Carregando...</td>
                   </tr>
                 </tbody>
               </table>

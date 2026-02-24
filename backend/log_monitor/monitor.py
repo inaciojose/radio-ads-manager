@@ -508,38 +508,42 @@ class LogMonitor:
     def create_veiculacoes_from_logs(self, propagandas: List[Dict]):
         """
         Cria veiculações em lote a partir dos dados do log.
+        Registra todas as propagandas detectadas, inclusive arquivos não cadastrados.
         """
         payload: List[Dict] = []
         for propaganda in propagandas:
             nome_arquivo = propaganda["nome_arquivo"]
             nome_key = nome_arquivo.strip().lower()
+
             if nome_key in self._arquivo_id_cache:
                 arquivo_id = self._arquivo_id_cache[nome_key]
-                if arquivo_id is None:
-                    continue
             else:
                 arquivo = self.api_client.get_arquivo_by_nome(nome_arquivo)
-                if not arquivo:
-                    # cacheia miss para evitar consultas repetidas no mesmo ciclo
-                    self._arquivo_id_cache[nome_key] = None
-                    logger.debug(f"Arquivo '{nome_arquivo}' não encontrado no cadastro - ignorando")
-                    continue
-                arquivo_id = arquivo["id"]
+                if arquivo:
+                    arquivo_id = arquivo["id"]
+                else:
+                    arquivo_id = None
+                    logger.debug(f"Arquivo '{nome_arquivo}' não encontrado no cadastro - registrando como não identificado")
                 self._arquivo_id_cache[nome_key] = arquivo_id
 
-            dedupe_key = (arquivo_id, propaganda["data_hora"].isoformat(), propaganda.get("frequencia"))
+            # Dedupe: usa arquivo_id quando cadastrado, nome_key quando não
+            dedupe_id = arquivo_id if arquivo_id is not None else nome_key
+            dedupe_key = (dedupe_id, propaganda["data_hora"].isoformat(), propaganda.get("frequencia"))
             if dedupe_key in self._dedupe_cache:
                 continue
 
-            payload.append(
-                {
-                    "arquivo_audio_id": arquivo_id,
-                    "data_hora": propaganda["data_hora"].isoformat(),
-                    "frequencia": propaganda.get("frequencia"),
-                    "tipo_programa": propaganda["tipo_programa"],
-                    "fonte": "zara_log",
-                }
-            )
+            item: Dict = {
+                "data_hora": propaganda["data_hora"].isoformat(),
+                "frequencia": propaganda.get("frequencia"),
+                "tipo_programa": propaganda["tipo_programa"],
+                "fonte": "zara_log",
+            }
+            if arquivo_id is not None:
+                item["arquivo_audio_id"] = arquivo_id
+            else:
+                item["nome_arquivo_raw"] = nome_arquivo
+
+            payload.append(item)
             self._dedupe_cache.add(dedupe_key)
 
         if not payload:

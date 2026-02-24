@@ -425,7 +425,8 @@ class ArquivoAudioResponse(ArquivoAudioBase):
 
 class VeiculacaoBase(BaseModel):
     """Schema base para veiculação"""
-    arquivo_audio_id: int
+    arquivo_audio_id: Optional[int] = None
+    nome_arquivo_raw: Optional[str] = None  # Preenchido quando arquivo não está cadastrado
     contrato_id: Optional[int] = None
     data_hora: datetime
     frequencia: Optional[str] = Field(None, description='Frequência: 102.7 ou 104.7')
@@ -480,9 +481,11 @@ class VeiculacaoDetalhada(BaseModel):
     frequencia: Optional[str]
     tipo_programa: Optional[str]
     processado: bool
-    arquivo_nome: str
+    contabilizada: bool
+    nome_arquivo_raw: Optional[str]
+    arquivo_nome: Optional[str]
     arquivo_titulo: Optional[str]
-    cliente_nome: str
+    cliente_nome: Optional[str]
     numero_contrato: Optional[str]
 
 

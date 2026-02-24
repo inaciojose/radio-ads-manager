@@ -301,7 +301,8 @@ class Veiculacao(Base):
     __tablename__ = "veiculacoes"
     
     id = Column(Integer, primary_key=True, index=True)
-    arquivo_audio_id = Column(Integer, ForeignKey("arquivos_audio.id"), nullable=False)
+    arquivo_audio_id = Column(Integer, ForeignKey("arquivos_audio.id"), nullable=True)
+    nome_arquivo_raw = Column(String(255))  # Preenchido quando arquivo não está cadastrado
     contrato_id = Column(Integer, ForeignKey("contratos.id"))
     data_hora = Column(DateTime(timezone=True), nullable=False, index=True)
     frequencia = Column(String(10), index=True)  # Frequência onde a chamada foi executada
