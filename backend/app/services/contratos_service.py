@@ -1,7 +1,32 @@
+from datetime import date
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+
+
+def auto_concluir_contratos_expirados(db: Session) -> int:
+    """
+    Marca como 'concluído' todos os contratos de dinâmica única cujo data_fim
+    já passou e ainda estão com status 'ativo'.
+    Usa bulk UPDATE para ser eficiente.
+    Retorna o número de contratos atualizados.
+    """
+    hoje = date.today()
+    atualizados = (
+        db.query(models.Contrato)
+        .filter(
+            models.Contrato.status_contrato == "ativo",
+            models.Contrato.nf_dinamica == "unica",
+            models.Contrato.data_fim.isnot(None),
+            models.Contrato.data_fim < hoje,
+        )
+        .update({"status_contrato": "concluído"}, synchronize_session=False)
+    )
+    if atualizados:
+        db.commit()
+    return atualizados
 
 
 class NumeroContratoConflictError(RuntimeError):

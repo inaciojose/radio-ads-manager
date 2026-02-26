@@ -14,9 +14,10 @@ import os
 import uuid
 from typing import Any
 
-from app.database import init_db, get_database_info
+from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings
 from app.routers import arquivos, auth, clientes, contratos, notas_fiscais, usuarios, veiculacoes
+from app.services.contratos_service import auto_concluir_contratos_expirados
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -52,7 +53,13 @@ async def lifespan(app: FastAPI):
     # Inicializar banco de dados
     init_db()
     ensure_initial_admin()
-    
+
+    # Concluir contratos de dinâmica única cujo período já encerrou
+    with SessionLocal() as db:
+        n = auto_concluir_contratos_expirados(db)
+        if n:
+            print(f"📋 {n} contrato(s) concluído(s) automaticamente")
+
     # Mostrar informações do banco
     db_info = get_database_info()
     print(f"📊 Banco de dados: {db_info['type']}")

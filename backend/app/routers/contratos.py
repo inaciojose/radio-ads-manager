@@ -15,6 +15,7 @@ from app import models, schemas
 from app.database import get_db
 from app.services.contratos_service import (
     NumeroContratoConflictError,
+    auto_concluir_contratos_expirados,
     criar_contrato_com_itens,
 )
 from app.services.veiculacoes_service import resolver_item_contrato_para_veiculacao
@@ -188,6 +189,8 @@ def listar_contratos(
     busca: Optional[str] = Query(None, description="Busca por número de contrato ou cliente"),
     db: Session = Depends(get_db),
 ):
+    auto_concluir_contratos_expirados(db)
+
     query = db.query(models.Contrato)
 
     if cliente_id:
