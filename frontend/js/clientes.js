@@ -5,9 +5,10 @@
 let clientesCache = []
 
 async function loadClientes() {
+  const status = document.getElementById("filter-cliente-status")?.value
   try {
     showLoading()
-    clientesCache = await api.getAllClientes()
+    clientesCache = await api.getAllClientes({ ...(status ? { status } : {}) })
     renderClientes(clientesCache)
   } catch (error) {
     showToast(error.message || "Erro ao carregar clientes", "error")

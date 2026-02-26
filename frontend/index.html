@@ -237,6 +237,11 @@
                 onkeyup="searchClientes()"
               />
             </div>
+            <select id="filter-cliente-status" onchange="loadClientes()">
+              <option value="">Todos</option>
+              <option value="ativo">Ativos</option>
+              <option value="inativo">Inativos</option>
+            </select>
           </div>
 
           <div class="card">
