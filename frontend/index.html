@@ -95,12 +95,23 @@
         </div>
       </div>
     </div>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
     <!-- Main Content -->
     <div class="main-content">
       <!-- Header -->
       <header class="header">
         <div class="header-left">
+          <button
+            id="btn-sidebar-toggle"
+            class="btn-sidebar-toggle"
+            type="button"
+            onclick="toggleSidebar(event)"
+            title="Recolher ou expandir menu"
+            aria-label="Recolher ou expandir menu"
+          >
+            <i class="fas fa-bars"></i>
+          </button>
           <h1 id="page-title">Dashboard</h1>
         </div>
         <div class="header-right">

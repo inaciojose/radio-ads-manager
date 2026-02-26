@@ -29,6 +29,7 @@
 
   /* Sidebar */
   --sidebar-width: 260px;
+  --sidebar-collapsed-width: 76px;
   --sidebar-bg: var(--dark);
   --sidebar-text: #cbd5e1;
 
@@ -68,6 +69,7 @@ body {
   flex-direction: column;
   z-index: 100;
   box-shadow: var(--shadow-lg);
+  transition: width 0.25s ease, transform 0.25s ease;
 }
 
 .logo {
@@ -169,6 +171,45 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: margin-left 0.25s ease;
+}
+
+body.sidebar-collapsed .sidebar {
+  width: var(--sidebar-collapsed-width);
+}
+
+body.sidebar-collapsed .main-content {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+body.sidebar-collapsed .logo {
+  justify-content: center;
+  padding: 1.5rem 0.75rem;
+}
+
+body.sidebar-collapsed .logo h2 {
+  display: none;
+}
+
+body.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+body.sidebar-collapsed .nav-item span {
+  display: none;
+}
+
+body.sidebar-collapsed .sidebar-footer {
+  padding: 1rem 0.75rem;
+}
+
+body.sidebar-collapsed .api-status {
+  justify-content: center;
+}
+
+body.sidebar-collapsed #api-status-text {
+  display: none;
 }
 
 /* Header */
@@ -182,6 +223,12 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .header h1 {
@@ -223,6 +270,29 @@ body {
 .btn-refresh:hover {
   background: var(--gray-lighter);
   color: var(--primary);
+}
+
+.btn-sidebar-toggle {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--gray-light);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  color: var(--gray);
+  transition: var(--transition);
+}
+
+.btn-sidebar-toggle:hover {
+  background: var(--gray-lighter);
+  color: var(--primary);
+}
+
+.sidebar-overlay {
+  display: none;
 }
 
 /* Content */
@@ -995,8 +1065,32 @@ body {
     transform: translateX(-100%);
   }
 
+  body.sidebar-mobile-open .sidebar {
+    transform: translateX(0);
+  }
+
   .main-content {
     margin-left: 0;
+  }
+
+  body.sidebar-collapsed .main-content {
+    margin-left: 0;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 90;
+  }
+
+  body.sidebar-mobile-open .sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .stats-grid {

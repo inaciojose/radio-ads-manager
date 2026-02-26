@@ -16,6 +16,86 @@ const pollingState = {
   healthRunning: false,
   pageRunning: false,
 }
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "radio_ads_sidebar_collapsed"
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 768px)").matches
+}
+
+function updateSidebarToggleButton() {
+  const toggleBtn = document.getElementById("btn-sidebar-toggle")
+  if (!toggleBtn) return
+
+  const icon = toggleBtn.querySelector("i")
+  const isCollapsed = document.body.classList.contains("sidebar-collapsed")
+  const isMobileOpen = document.body.classList.contains("sidebar-mobile-open")
+  const label = isMobileViewport()
+    ? isMobileOpen
+      ? "Fechar menu"
+      : "Abrir menu"
+    : isCollapsed
+      ? "Expandir menu"
+      : "Recolher menu"
+
+  toggleBtn.setAttribute("title", label)
+  toggleBtn.setAttribute("aria-label", label)
+
+  if (!icon) return
+  icon.classList.remove("fa-bars", "fa-angles-left", "fa-angles-right", "fa-times")
+  if (isMobileViewport()) {
+    icon.classList.add(isMobileOpen ? "fa-times" : "fa-bars")
+    return
+  }
+
+  icon.classList.add(isCollapsed ? "fa-angles-right" : "fa-angles-left")
+}
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed)
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed))
+  } catch {
+    // Ignora indisponibilidade de armazenamento local.
+  }
+  updateSidebarToggleButton()
+}
+
+function closeMobileSidebar() {
+  document.body.classList.remove("sidebar-mobile-open")
+  updateSidebarToggleButton()
+}
+
+function toggleSidebar(evt) {
+  evt?.preventDefault()
+
+  if (isMobileViewport()) {
+    document.body.classList.toggle("sidebar-mobile-open")
+    updateSidebarToggleButton()
+    return
+  }
+
+  const isCollapsed = document.body.classList.contains("sidebar-collapsed")
+  setSidebarCollapsed(!isCollapsed)
+}
+
+function initSidebarState() {
+  let shouldCollapse = false
+  try {
+    shouldCollapse = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"
+  } catch {
+    shouldCollapse = false
+  }
+
+  setSidebarCollapsed(shouldCollapse)
+  closeMobileSidebar()
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) {
+      closeMobileSidebar()
+    }
+    updateSidebarToggleButton()
+  })
+}
 
 function canWrite() {
   return appState.role === "admin" || appState.role === "operador"
@@ -216,6 +296,10 @@ function showPage(pageName, evt) {
   // Carregar dados da página
   loadPageData(pageName)
   restartPolling()
+
+  if (isMobileViewport()) {
+    closeMobileSidebar()
+  }
 }
 
 // Carregar dados da página
@@ -329,6 +413,7 @@ function refreshCurrentPage(evt) {
 // Inicialização
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("🚀 Radio Ads Manager iniciando...")
+  initSidebarState()
 
   // Verificar API
   await checkAPIStatus()
