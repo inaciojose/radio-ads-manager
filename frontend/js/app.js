@@ -161,11 +161,13 @@ function updateAuthUI() {
   })
 
   document.querySelectorAll("[data-auth-only='true']").forEach((el) => {
-    el.style.display = appState.user ? "inline-flex" : "none"
+    const displayValue = el.classList.contains("nav-item") ? "flex" : "inline-flex"
+    el.style.display = appState.user ? displayValue : "none"
   })
 
   document.querySelectorAll("[data-admin-only='true']").forEach((el) => {
-    el.style.display = canManageUsers() ? "inline-flex" : "none"
+    const displayValue = el.classList.contains("nav-item") ? "flex" : "inline-flex"
+    el.style.display = canManageUsers() ? displayValue : "none"
   })
 
   if (!canAccessPage(appState.currentPage)) {

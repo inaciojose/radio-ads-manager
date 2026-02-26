@@ -194,10 +194,21 @@ body.sidebar-collapsed .logo h2 {
 body.sidebar-collapsed .nav-item {
   justify-content: center;
   padding: 0.75rem;
+  min-height: 44px;
+  gap: 0;
 }
 
 body.sidebar-collapsed .nav-item span {
   display: none;
+}
+
+body.sidebar-collapsed .nav-item i {
+  width: auto;
+}
+
+body.sidebar-collapsed .nav-item.active {
+  border-left: none;
+  box-shadow: inset 3px 0 0 0 var(--white);
 }
 
 body.sidebar-collapsed .sidebar-footer {
