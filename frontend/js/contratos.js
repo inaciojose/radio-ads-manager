@@ -541,6 +541,7 @@ async function showContratoModal(contratoId = null) {
     editItemSection.style.display = "block"
     createMetaSection.style.display = "none"
     editMetaSection.style.display = "block"
+    document.getElementById("contrato-nf-resumo-section").style.display = ""
     renderContratoItensEdit(contrato.itens || [])
     renderContratoMetasEdit(metas || [])
   } else {
@@ -556,6 +557,7 @@ async function showContratoModal(contratoId = null) {
     editItemSection.style.display = "none"
     createMetaSection.style.display = "block"
     editMetaSection.style.display = "none"
+    document.getElementById("contrato-nf-resumo-section").style.display = "none"
     renderContratoMetasCreate()
   }
 
@@ -614,10 +616,9 @@ async function saveContrato() {
         ? null
         : Number(document.getElementById("contrato-valor-total").value),
     status_contrato: document.getElementById("contrato-status-contrato").value,
-    status_nf: document.getElementById("contrato-status-nf").value,
-    numero_nf: document.getElementById("contrato-numero-nf").value.trim() || null,
-    data_emissao_nf:
-      document.getElementById("contrato-data-emissao-nf").value || null,
+    status_nf: isEdit ? document.getElementById("contrato-status-nf").value : "pendente",
+    numero_nf: isEdit ? (document.getElementById("contrato-numero-nf").value.trim() || null) : null,
+    data_emissao_nf: isEdit ? (document.getElementById("contrato-data-emissao-nf").value || null) : null,
     observacoes: document.getElementById("contrato-observacoes").value.trim() || null,
   }
 
