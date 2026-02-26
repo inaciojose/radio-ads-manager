@@ -66,6 +66,22 @@ def atualizar_usuario(
         if username_existente:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username já cadastrado")
 
+    # Impedir que a atualização elimine o último admin ativo
+    if db_user.role == ROLE_ADMIN and db_user.ativo:
+        inativando = update_data.get("ativo") is False
+        rebaixando = "role" in update_data and update_data["role"] != ROLE_ADMIN
+        if inativando or rebaixando:
+            outros_admins_ativos = db.query(models.Usuario).filter(
+                models.Usuario.role == ROLE_ADMIN,
+                models.Usuario.ativo == True,  # noqa: E712
+                models.Usuario.id != usuario_id,
+            ).count()
+            if outros_admins_ativos == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Não é possível remover o último admin ativo",
+                )
+
     if "password" in update_data:
         update_data["password_hash"] = hash_password(update_data.pop("password"))
 
