@@ -184,3 +184,37 @@ const updateDateTime = () => {
 // Executar a cada minuto
 setInterval(updateDateTime, 60000)
 updateDateTime()
+
+// Máscaras de entrada
+const maskCnpjCpf = (value) => {
+  const digits = value.replace(/\D/g, "")
+  if (digits.length <= 11) {
+    // CPF: 000.000.000-00
+    return digits
+      .slice(0, 11)
+      .replace(/^(\d{3})(\d)/, "$1.$2")
+      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})$/, "$1.$2.$3-$4")
+  }
+  // CNPJ: 00.000.000/0000-00
+  return digits
+    .slice(0, 14)
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, "$1.$2.$3/$4-$5")
+}
+
+const maskTelefone = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 11)
+  if (digits.length <= 10) {
+    // Fixo: (00) 0000-0000
+    return digits
+      .replace(/^(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d{1,4})$/, "$1-$2")
+  }
+  // Celular: (00) 00000-0000
+  return digits
+    .replace(/^(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d{1,4})$/, "$1-$2")
+}

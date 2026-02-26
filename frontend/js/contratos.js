@@ -544,7 +544,7 @@ async function showContratoModal(contratoId = null) {
     renderContratoItensEdit(contrato.itens || [])
     renderContratoMetasEdit(metas || [])
   } else {
-    const clientes = await api.getAllClientes()
+    const clientes = await api.getAllClientes({ status: "ativo" })
     clienteSelect.innerHTML = [
       '<option value="">Selecione...</option>',
       ...clientes.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`),

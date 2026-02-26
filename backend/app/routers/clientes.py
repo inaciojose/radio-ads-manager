@@ -172,7 +172,20 @@ def atualizar_cliente(
     
     # Atualizar apenas os campos fornecidos
     update_data = cliente_update.model_dump(exclude_unset=True)
-    
+
+    # Bloquear inativação de cliente com contratos ativos
+    if update_data.get("status") == "inativo" and db_cliente.status != "inativo":
+        contratos_ativos = db.query(models.Contrato).filter(
+            models.Contrato.cliente_id == cliente_id,
+            models.Contrato.status_contrato == "ativo",
+        ).all()
+        if contratos_ativos:
+            numeros = ", ".join(c.numero_contrato or f"#{c.id}" for c in contratos_ativos)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Não é possível inativar este cliente pois possui contrato(s) ativo(s): {numeros}",
+            )
+
     # Se está atualizando CNPJ/CPF, verificar se não existe outro cliente com ele
     if "cnpj_cpf" in update_data and update_data["cnpj_cpf"]:
         cliente_existente = db.query(models.Cliente).filter(

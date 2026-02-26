@@ -6,7 +6,7 @@ let arquivosCache = []
 let clientesArquivoCache = []
 
 async function ensureClientesArquivoCache() {
-  clientesArquivoCache = await api.getAllClientes()
+  clientesArquivoCache = await api.getAllClientes({ status: "ativo" })
   return clientesArquivoCache
 }
 

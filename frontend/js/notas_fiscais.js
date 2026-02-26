@@ -23,7 +23,7 @@ async function ensureNotasFiscaisClientesFiltro() {
   if (!select || notasFiscaisClientesCache.length) return
 
   try {
-    const clientes = await api.getAllClientes({ ativo: true })
+    const clientes = await api.getAllClientes({ status: "ativo" })
     notasFiscaisClientesCache = Array.isArray(clientes) ? clientes : []
     const options = notasFiscaisClientesCache
       .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")))

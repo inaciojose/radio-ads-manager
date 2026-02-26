@@ -75,8 +75,8 @@ function showClienteModal(cliente = null) {
 
   document.getElementById("cliente-id").value = cliente?.id || ""
   document.getElementById("cliente-nome").value = cliente?.nome || ""
-  document.getElementById("cliente-cnpj").value = cliente?.cnpj_cpf || ""
-  document.getElementById("cliente-telefone").value = cliente?.telefone || ""
+  document.getElementById("cliente-cnpj").value = maskCnpjCpf(cliente?.cnpj_cpf || "")
+  document.getElementById("cliente-telefone").value = maskTelefone(cliente?.telefone || "")
   document.getElementById("cliente-email").value = cliente?.email || ""
   document.getElementById("cliente-endereco").value = cliente?.endereco || ""
   document.getElementById("cliente-status").value = cliente?.status || "ativo"

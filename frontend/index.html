@@ -550,11 +550,11 @@
             <div class="form-row">
               <div class="form-group">
                 <label>CNPJ/CPF</label>
-                <input type="text" id="cliente-cnpj" />
+                <input type="text" id="cliente-cnpj" inputmode="numeric" oninput="this.value = maskCnpjCpf(this.value)" placeholder="000.000.000-00" />
               </div>
               <div class="form-group">
                 <label>Telefone</label>
-                <input type="text" id="cliente-telefone" />
+                <input type="text" id="cliente-telefone" inputmode="numeric" oninput="this.value = maskTelefone(this.value)" placeholder="(00) 00000-0000" />
               </div>
             </div>
 
