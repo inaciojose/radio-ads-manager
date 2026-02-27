@@ -508,12 +508,12 @@
               <table class="table" id="table-notas-fiscais">
                 <thead>
                   <tr>
-                    <th>Cliente</th>
-                    <th>Contrato</th>
-                    <th>Competência</th>
-                    <th>Valor</th>
-                    <th>Status</th>
-                    <th>Número NF</th>
+                    <th onclick="toggleNotasFiscaisSort('cliente_nome')" data-sort-key="cliente_nome" style="cursor:pointer;user-select:none">Cliente <i class="fas fa-sort"></i></th>
+                    <th onclick="toggleNotasFiscaisSort('contrato_numero')" data-sort-key="contrato_numero" style="cursor:pointer;user-select:none">Contrato <i class="fas fa-sort"></i></th>
+                    <th onclick="toggleNotasFiscaisSort('competencia')" data-sort-key="competencia" style="cursor:pointer;user-select:none">Competência <i class="fas fa-sort"></i></th>
+                    <th onclick="toggleNotasFiscaisSort('valor_bruto')" data-sort-key="valor_bruto" style="cursor:pointer;user-select:none">Valor Bruto <i class="fas fa-sort"></i></th>
+                    <th onclick="toggleNotasFiscaisSort('status')" data-sort-key="status" style="cursor:pointer;user-select:none">Status <i class="fas fa-sort"></i></th>
+                    <th onclick="toggleNotasFiscaisSort('numero')" data-sort-key="numero" style="cursor:pointer;user-select:none">Número NF <i class="fas fa-sort"></i></th>
                     <th>Ação</th>
                   </tr>
                 </thead>

@@ -13,6 +13,15 @@ from app.database import get_db
 
 router = APIRouter(prefix="/notas-fiscais", tags=["Notas Fiscais"])
 
+_SORT_COLUMNS = {
+    "cliente_nome": models.Cliente.nome,
+    "contrato_numero": models.Contrato.numero_contrato,
+    "competencia": models.NotaFiscal.competencia,
+    "valor_bruto": models.NotaFiscal.valor_bruto,
+    "status": models.NotaFiscal.status,
+    "numero": models.NotaFiscal.numero,
+}
+
 
 def _parse_competencia_yyyy_mm(valor: str) -> date:
     raw = (valor or "").strip()
@@ -39,6 +48,8 @@ def listar_notas_fiscais(
     competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
     status_nf: Optional[str] = Query(None, pattern="^(pendente|emitida|paga|cancelada)$"),
     cliente_id: Optional[int] = Query(None, ge=1),
+    sort_by: Optional[str] = Query(None),
+    sort_dir: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
@@ -59,17 +70,20 @@ def listar_notas_fiscais(
         query = query.filter(models.Contrato.cliente_id == cliente_id)
 
     total = query.count()
-    rows = (
-        query.order_by(
+
+    sort_col = _SORT_COLUMNS.get(sort_by) if sort_by else None
+    if sort_col is not None:
+        primary_order = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
+        order_clause = [primary_order, models.NotaFiscal.id.desc()]
+    else:
+        order_clause = [
             models.NotaFiscal.competencia.desc(),
             models.NotaFiscal.data_emissao.desc(),
             models.NotaFiscal.created_at.desc(),
             models.NotaFiscal.id.desc(),
-        )
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+        ]
+
+    rows = query.order_by(*order_clause).offset(skip).limit(limit).all()
 
     items = [
         schemas.NotaFiscalListItem(
@@ -82,6 +96,7 @@ def listar_notas_fiscais(
             competencia=nota.competencia,
             status=nota.status,
             numero=nota.numero,
+            serie=nota.serie,
             data_emissao=nota.data_emissao,
             data_pagamento=nota.data_pagamento,
             numero_recibo=nota.numero_recibo,

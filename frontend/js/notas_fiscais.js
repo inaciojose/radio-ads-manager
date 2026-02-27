@@ -6,9 +6,12 @@ const notasFiscaisState = {
   skip: 0,
   limit: 50,
   total: 0,
+  sortBy: null,
+  sortDir: "desc",
 }
 
 let notasFiscaisClientesCache = []
+let _notasFiscaisItems = []
 
 function _formatCompetenciaNota(competencia) {
   if (!competencia) return "-"
@@ -46,10 +49,37 @@ function _buildNotasFiscaisParams() {
     ...(statusNf ? { status_nf: statusNf } : {}),
     ...(clienteId ? { cliente_id: clienteId } : {}),
     ...(competenciaRaw ? { competencia: competenciaRaw } : {}),
+    ...(notasFiscaisState.sortBy
+      ? { sort_by: notasFiscaisState.sortBy, sort_dir: notasFiscaisState.sortDir }
+      : {}),
   }
 }
 
+function toggleNotasFiscaisSort(column) {
+  if (notasFiscaisState.sortBy === column) {
+    notasFiscaisState.sortDir = notasFiscaisState.sortDir === "asc" ? "desc" : "asc"
+  } else {
+    notasFiscaisState.sortBy = column
+    notasFiscaisState.sortDir = "asc"
+  }
+  loadNotasFiscais()
+}
+
+function _updateNotasFiscaisSortHeaders() {
+  document.querySelectorAll("#table-notas-fiscais th[data-sort-key]").forEach((th) => {
+    const icon = th.querySelector("i")
+    if (!icon) return
+    if (th.dataset.sortKey === notasFiscaisState.sortBy) {
+      icon.className = notasFiscaisState.sortDir === "asc" ? "fas fa-sort-up" : "fas fa-sort-down"
+    } else {
+      icon.className = "fas fa-sort"
+    }
+  })
+}
+
 function renderNotasFiscais(items) {
+  _notasFiscaisItems = items
+  _updateNotasFiscaisSortHeaders()
   const tbody = document.querySelector("#table-notas-fiscais tbody")
   if (!tbody) return
 
@@ -65,18 +95,48 @@ function renderNotasFiscais(items) {
         <td>${escapeHtml(nf.cliente_nome || "-")}</td>
         <td>${escapeHtml(nf.contrato_numero || `#${nf.contrato_id}`)}</td>
         <td>${_formatCompetenciaNota(nf.competencia)}</td>
-        <td>${formatCurrency(nf.valor)}</td>
+        <td>${formatCurrency(nf.valor_bruto)}</td>
         <td>${getStatusBadge(nf.status, "nf")}</td>
         <td>${escapeHtml(nf.numero || "-")}</td>
         <td>
+          <button class="btn btn-sm btn-primary" onclick="editarNotaFiscalDireta(${nf.id})">
+            <i class="fas fa-pen"></i> Editar
+          </button>
           <button class="btn btn-sm btn-secondary" onclick="openContratoFromNotaFiscal(${nf.contrato_id})">
-            Abrir Contrato
+            Contrato
           </button>
         </td>
       </tr>
     `,
     )
     .join("")
+}
+
+function editarNotaFiscalDireta(notaId) {
+  if (!requireWriteAccess()) return
+  const nf = _notasFiscaisItems.find((n) => n.id === notaId)
+  if (!nf) return
+
+  document.getElementById("nf-contrato-id").value = nf.contrato_id
+  document.getElementById("nf-nota-id").value = nf.id
+  document.getElementById("nf-status").value = nf.status || "pendente"
+  document.getElementById("nf-competencia").value = nf.competencia ? String(nf.competencia).slice(0, 7) : ""
+  document.getElementById("nf-numero-recibo").value = nf.numero_recibo || ""
+  document.getElementById("nf-numero").value = nf.numero || ""
+  document.getElementById("nf-serie").value = nf.serie || ""
+  document.getElementById("nf-data-emissao").value = nf.data_emissao || ""
+  document.getElementById("nf-data-pagamento").value = nf.data_pagamento || ""
+  document.getElementById("nf-valor-bruto").value = nf.valor_bruto ?? ""
+  document.getElementById("nf-valor-liquido").value = nf.valor_liquido ?? ""
+  document.getElementById("nf-valor-pago").value = nf.valor_pago ?? ""
+  document.getElementById("nf-forma-pagamento").value = nf.forma_pagamento || ""
+  document.getElementById("nf-campanha-agentes").value = nf.campanha_agentes || ""
+  document.getElementById("nf-observacoes").value = nf.observacoes || ""
+
+  // Após salvar, recarregar a listagem de NFs (não a de contratos)
+  window._nfSaveCallback = () => loadNotasFiscais(false)
+
+  openModal("modal-nota-fiscal")
 }
 
 function updateNotasFiscaisPagination() {
