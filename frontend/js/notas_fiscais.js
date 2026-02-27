@@ -105,6 +105,9 @@ function renderNotasFiscais(items) {
           <button class="btn btn-sm btn-secondary" onclick="openContratoFromNotaFiscal(${nf.contrato_id})">
             Contrato
           </button>
+          <button class="btn btn-sm btn-danger" onclick="excluirNotaFiscalDireta(${nf.id})">
+            <i class="fas fa-trash"></i>
+          </button>
         </td>
       </tr>
     `,
@@ -137,6 +140,33 @@ function editarNotaFiscalDireta(notaId) {
   window._nfSaveCallback = () => loadNotasFiscais(false)
 
   openModal("modal-nota-fiscal")
+}
+
+async function excluirNotaFiscalDireta(notaId) {
+  if (!requireWriteAccess()) return
+  const nf = _notasFiscaisItems.find((n) => n.id === notaId)
+  if (!nf) return
+
+  const descricao = [
+    nf.cliente_nome || `Cliente ${nf.cliente_id}`,
+    nf.numero ? `NF ${nf.numero}` : null,
+    nf.competencia ? _formatCompetenciaNota(nf.competencia) : null,
+  ]
+    .filter(Boolean)
+    .join(" — ")
+
+  if (!confirm(`Excluir permanentemente a nota fiscal de ${descricao}?\n\nEssa ação não pode ser desfeita.`)) return
+
+  try {
+    showLoading()
+    await api.deleteNotaFiscalRegistro(notaId)
+    showToast("Nota fiscal excluída", "success")
+    loadNotasFiscais(false)
+  } catch (error) {
+    showToast(error.message || "Erro ao excluir nota fiscal", "error")
+  } finally {
+    hideLoading()
+  }
 }
 
 function updateNotasFiscaisPagination() {
