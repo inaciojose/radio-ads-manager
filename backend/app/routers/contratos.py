@@ -1146,11 +1146,23 @@ def emitir_nota_fiscal_mensal_contrato(
         db.add(nota)
         db.flush()
 
-    nota.status = "emitida"
+    nota.status = payload.status or "emitida"
     nota.numero = payload.numero_nf
     nota.data_emissao = payload.data_emissao_nf or date.today()
+    if payload.data_pagamento is not None:
+        nota.data_pagamento = payload.data_pagamento
+    if payload.numero_recibo is not None:
+        nota.numero_recibo = payload.numero_recibo
     if payload.valor_bruto is not None:
         nota.valor_bruto = payload.valor_bruto
+    if payload.valor_liquido is not None:
+        nota.valor_liquido = payload.valor_liquido
+    if payload.valor_pago is not None:
+        nota.valor_pago = payload.valor_pago
+    if payload.forma_pagamento is not None:
+        nota.forma_pagamento = payload.forma_pagamento
+    if payload.campanha_agentes is not None:
+        nota.campanha_agentes = payload.campanha_agentes
     if payload.observacoes is not None:
         nota.observacoes = payload.observacoes
 

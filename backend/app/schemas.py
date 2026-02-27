@@ -164,8 +164,15 @@ FORMAS_PAGAMENTO = [
 
 class EmitirNotaFiscalMensalRequest(BaseModel):
     numero_nf: str = Field(..., min_length=1, max_length=50)
+    status: Optional[str] = Field(None, pattern="^(emitida|paga|cancelada)$")
     data_emissao_nf: Optional[date] = None
+    data_pagamento: Optional[date] = None
+    numero_recibo: Optional[str] = Field(None, max_length=100)
     valor_bruto: Optional[float] = Field(None, ge=0)
+    valor_liquido: Optional[float] = Field(None, ge=0)
+    valor_pago: Optional[float] = Field(None, ge=0)
+    forma_pagamento: Optional[str] = Field(None, max_length=50)
+    campanha_agentes: Optional[str] = Field(None, max_length=255)
     observacoes: Optional[str] = None
 
 

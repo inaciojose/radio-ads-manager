@@ -407,22 +407,7 @@ class API {
   }
 
   async updateFaturamentoMensal(faturamentoId, data) {
-    const nota = await this.updateNotaFiscalRegistro(faturamentoId, {
-      status: data.status_nf,
-      numero: data.numero_nf,
-      data_emissao: data.data_emissao_nf,
-      data_pagamento: data.data_pagamento_nf,
-      valor: data.valor_cobrado,
-      observacoes: data.observacoes,
-    })
-    return {
-      ...nota,
-      status_nf: nota.status,
-      numero_nf: nota.numero,
-      data_emissao_nf: nota.data_emissao,
-      data_pagamento_nf: nota.data_pagamento,
-      valor_cobrado: nota.valor,
-    }
+    return this.updateNotaFiscalRegistro(faturamentoId, data)
   }
 
   async getContratoNotasFiscais(contratoId, params = {}) {
