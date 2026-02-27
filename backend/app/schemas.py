@@ -154,10 +154,18 @@ class ContratoArquivoMetaResponse(ContratoArquivoMetaBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+FORMAS_PAGAMENTO = [
+    "Caixa Seara",
+    "CC Banco do Brasil",
+    "CC Bradesco",
+    "Gerência Net",
+]
+
+
 class EmitirNotaFiscalMensalRequest(BaseModel):
     numero_nf: str = Field(..., min_length=1, max_length=50)
     data_emissao_nf: Optional[date] = None
-    valor_cobrado: Optional[float] = Field(None, ge=0)
+    valor_bruto: Optional[float] = Field(None, ge=0)
     observacoes: Optional[str] = None
 
 
@@ -176,7 +184,12 @@ class NotaFiscalBase(BaseModel):
     serie: Optional[str] = Field(None, max_length=20)
     data_emissao: Optional[date] = None
     data_pagamento: Optional[date] = None
-    valor: Optional[float] = Field(None, ge=0)
+    numero_recibo: Optional[str] = Field(None, max_length=100)
+    valor_bruto: Optional[float] = Field(None, ge=0)
+    valor_liquido: Optional[float] = Field(None, ge=0)
+    valor_pago: Optional[float] = Field(None, ge=0)
+    forma_pagamento: Optional[str] = Field(None, max_length=50)
+    campanha_agentes: Optional[str] = Field(None, max_length=255)
     observacoes: Optional[str] = None
 
     @field_validator("tipo")
@@ -201,7 +214,8 @@ class NotaFiscalBase(BaseModel):
             if self.competencia.day != 1:
                 raise ValueError("competencia deve ser o primeiro dia do mes")
         elif self.competencia is not None:
-            raise ValueError("competencia deve ser nula para notas unicas")
+            if self.competencia.day != 1:
+                raise ValueError("competencia deve ser o primeiro dia do mes")
         return self
 
 
@@ -211,11 +225,17 @@ class NotaFiscalCreate(NotaFiscalBase):
 
 class NotaFiscalUpdate(BaseModel):
     status: Optional[str] = None
+    competencia: Optional[date] = None
     numero: Optional[str] = Field(None, max_length=50)
     serie: Optional[str] = Field(None, max_length=20)
     data_emissao: Optional[date] = None
     data_pagamento: Optional[date] = None
-    valor: Optional[float] = Field(None, ge=0)
+    numero_recibo: Optional[str] = Field(None, max_length=100)
+    valor_bruto: Optional[float] = Field(None, ge=0)
+    valor_liquido: Optional[float] = Field(None, ge=0)
+    valor_pago: Optional[float] = Field(None, ge=0)
+    forma_pagamento: Optional[str] = Field(None, max_length=50)
+    campanha_agentes: Optional[str] = Field(None, max_length=255)
     observacoes: Optional[str] = None
 
     @field_validator("status")
@@ -249,7 +269,12 @@ class NotaFiscalListItem(BaseModel):
     numero: Optional[str] = None
     data_emissao: Optional[date] = None
     data_pagamento: Optional[date] = None
-    valor: Optional[float] = None
+    numero_recibo: Optional[str] = None
+    valor_bruto: Optional[float] = None
+    valor_liquido: Optional[float] = None
+    valor_pago: Optional[float] = None
+    forma_pagamento: Optional[str] = None
+    campanha_agentes: Optional[str] = None
     observacoes: Optional[str] = None
     created_at: datetime
 

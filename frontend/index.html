@@ -778,6 +778,14 @@
               </select>
             </div>
             <div class="form-group">
+              <label>Competência (mês de referência)</label>
+              <input type="month" id="nf-competencia" />
+            </div>
+            <div class="form-group">
+              <label>Número do Recibo *</label>
+              <input type="text" id="nf-numero-recibo" required />
+            </div>
+            <div class="form-group">
               <label>Número NF</label>
               <input type="text" id="nf-numero" />
             </div>
@@ -794,8 +802,30 @@
               <input type="date" id="nf-data-pagamento" />
             </div>
             <div class="form-group">
-              <label>Valor (R$)</label>
-              <input type="number" step="0.01" min="0" id="nf-valor" />
+              <label>Valor Bruto (R$)</label>
+              <input type="number" step="0.01" min="0" id="nf-valor-bruto" />
+            </div>
+            <div class="form-group">
+              <label>Valor Líquido (R$)</label>
+              <input type="number" step="0.01" min="0" id="nf-valor-liquido" />
+            </div>
+            <div class="form-group">
+              <label>Valor Pago (R$)</label>
+              <input type="number" step="0.01" min="0" id="nf-valor-pago" />
+            </div>
+            <div class="form-group">
+              <label>Forma de Pagamento</label>
+              <select id="nf-forma-pagamento">
+                <option value="">— Selecione —</option>
+                <option value="Caixa Seara">Caixa Seara</option>
+                <option value="CC Banco do Brasil">CC Banco do Brasil</option>
+                <option value="CC Bradesco">CC Bradesco</option>
+                <option value="Gerência Net">Gerência Net</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Campanha / Agentes</label>
+              <input type="text" id="nf-campanha-agentes" placeholder="Ex: Brasil Seguro" />
             </div>
             <div class="form-group">
               <label>Observações</label>
@@ -851,25 +881,57 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>Número NF</label>
-                <input type="text" id="faturamento-numero-nf" />
+                <label>Número do Recibo</label>
+                <input type="text" id="faturamento-numero-recibo" />
               </div>
             </div>
             <div class="form-row">
+              <div class="form-group">
+                <label>Número NF</label>
+                <input type="text" id="faturamento-numero-nf" />
+              </div>
               <div class="form-group">
                 <label>Data Emissão</label>
                 <input type="date" id="faturamento-data-emissao" />
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Data Pagamento</label>
                 <input type="date" id="faturamento-data-pagamento" />
               </div>
+              <div class="form-group">
+                <label>Valor Bruto (R$)</label>
+                <input type="number" step="0.01" min="0" id="faturamento-valor-bruto" />
+              </div>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Valor Cobrado (R$)</label>
-                <input type="number" step="0.01" min="0" id="faturamento-valor" />
+                <label>Valor Líquido (R$)</label>
+                <input type="number" step="0.01" min="0" id="faturamento-valor-liquido" />
               </div>
+              <div class="form-group">
+                <label>Valor Pago (R$)</label>
+                <input type="number" step="0.01" min="0" id="faturamento-valor-pago" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Forma de Pagamento</label>
+                <select id="faturamento-forma-pagamento">
+                  <option value="">— Selecione —</option>
+                  <option value="Caixa Seara">Caixa Seara</option>
+                  <option value="CC Banco do Brasil">CC Banco do Brasil</option>
+                  <option value="CC Bradesco">CC Bradesco</option>
+                  <option value="Gerência Net">Gerência Net</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Campanha / Agentes</label>
+                <input type="text" id="faturamento-campanha-agentes" placeholder="Ex: Brasil Seguro" />
+              </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Observações</label>
                 <input type="text" id="faturamento-observacoes" />
@@ -894,17 +956,22 @@
                 <tr>
                   <th>Competência</th>
                   <th>Status</th>
+                  <th>Recibo</th>
                   <th>Número NF</th>
                   <th>Emissão</th>
                   <th>Pagamento</th>
-                  <th>Valor</th>
+                  <th>Valor Bruto</th>
+                  <th>Vlr. Líquido</th>
+                  <th>Vlr. Pago</th>
+                  <th>Forma Pgto.</th>
+                  <th>Campanha/Ag.</th>
                   <th>Edição</th>
                   <th>Ação</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td colspan="8" class="text-center">Carregando...</td>
+                  <td colspan="13" class="text-center">Carregando...</td>
                 </tr>
               </tbody>
             </table>

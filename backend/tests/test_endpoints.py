@@ -820,7 +820,7 @@ def test_emitir_nf_mensal_cria_on_demand(db):
         competencia="2026-03",
         payload=schemas.EmitirNotaFiscalMensalRequest(
             numero_nf="NF-2026-03-0001",
-            valor_cobrado=2200,
+            valor_bruto=2200,
         ),
         db=db,
     )

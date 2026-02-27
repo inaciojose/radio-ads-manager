@@ -84,7 +84,12 @@ def listar_notas_fiscais(
             numero=nota.numero,
             data_emissao=nota.data_emissao,
             data_pagamento=nota.data_pagamento,
-            valor=nota.valor,
+            numero_recibo=nota.numero_recibo,
+            valor_bruto=nota.valor_bruto,
+            valor_liquido=nota.valor_liquido,
+            valor_pago=nota.valor_pago,
+            forma_pagamento=nota.forma_pagamento,
+            campanha_agentes=nota.campanha_agentes,
             observacoes=nota.observacoes,
             created_at=nota.created_at,
         )
