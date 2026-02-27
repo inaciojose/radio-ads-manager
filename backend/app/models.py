@@ -230,13 +230,21 @@ class NotaFiscal(Base):
     """
     __tablename__ = "notas_fiscais"
     __table_args__ = (
-        UniqueConstraint("contrato_id", "tipo", "competencia", name="uq_nota_fiscal_competencia"),
+        # Partial index: NFs canceladas nao participam da unicidade de periodo
         Index(
-            "uq_notas_fiscais_unica_por_contrato",
+            "uq_nota_fiscal_competencia_ativa",
+            "contrato_id", "tipo", "competencia",
+            unique=True,
+            sqlite_where=text("status != 'cancelada'"),
+            postgresql_where=text("status != 'cancelada'"),
+        ),
+        # Apenas uma NF unica ATIVA por contrato (canceladas podem coexistir)
+        Index(
+            "uq_notas_fiscais_unica_ativa_por_contrato",
             "contrato_id",
             unique=True,
-            sqlite_where=text("tipo = 'unica'"),
-            postgresql_where=text("tipo = 'unica'"),
+            sqlite_where=text("tipo = 'unica' AND status != 'cancelada'"),
+            postgresql_where=text("tipo = 'unica' AND status != 'cancelada'"),
         ),
     )
 
@@ -249,7 +257,12 @@ class NotaFiscal(Base):
     serie = Column(String(20))
     data_emissao = Column(Date)
     data_pagamento = Column(Date)
-    valor = Column(Float)
+    numero_recibo = Column(String(100))
+    valor_bruto = Column(Float)
+    valor_liquido = Column(Float)
+    valor_pago = Column(Float)
+    forma_pagamento = Column(String(50))
+    campanha_agentes = Column(String(255))
     observacoes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

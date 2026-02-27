@@ -815,16 +815,26 @@ async function showNotaFiscalModal(id) {
   }
 
   const notas = await api.getContratoNotasFiscais(contrato.id, { tipo: "unica" })
-  const nota = Array.isArray(notas) && notas.length ? notas[0] : null
+  // Usa apenas a NF ativa; NFs canceladas ficam preservadas no banco mas não pré-preenchem o form
+  const nota = Array.isArray(notas)
+    ? (notas.find((n) => n.status !== "cancelada") ?? null)
+    : null
 
   document.getElementById("nf-contrato-id").value = contrato.id
   document.getElementById("nf-nota-id").value = nota?.id || ""
-  document.getElementById("nf-status").value = nota?.status || contrato.status_nf || "pendente"
+  document.getElementById("nf-status").value = nota?.status || "pendente"
+  // competencia vem como "YYYY-MM-DD"; input[type=month] espera "YYYY-MM"
+  document.getElementById("nf-competencia").value = nota?.competencia ? nota.competencia.slice(0, 7) : ""
+  document.getElementById("nf-numero-recibo").value = nota?.numero_recibo || ""
   document.getElementById("nf-numero").value = nota?.numero || contrato.numero_nf || ""
   document.getElementById("nf-serie").value = nota?.serie || ""
   document.getElementById("nf-data-emissao").value = nota?.data_emissao || contrato.data_emissao_nf || ""
   document.getElementById("nf-data-pagamento").value = nota?.data_pagamento || ""
-  document.getElementById("nf-valor").value = nota?.valor ?? ""
+  document.getElementById("nf-valor-bruto").value = nota?.valor_bruto ?? ""
+  document.getElementById("nf-valor-liquido").value = nota?.valor_liquido ?? ""
+  document.getElementById("nf-valor-pago").value = nota?.valor_pago ?? ""
+  document.getElementById("nf-forma-pagamento").value = nota?.forma_pagamento || ""
+  document.getElementById("nf-campanha-agentes").value = nota?.campanha_agentes || ""
   document.getElementById("nf-observacoes").value = nota?.observacoes || ""
 
   openModal("modal-nota-fiscal")
@@ -835,36 +845,41 @@ async function saveNotaFiscal() {
   const contratoId = Number(document.getElementById("nf-contrato-id").value)
   const notaId = Number(document.getElementById("nf-nota-id").value || 0)
   const status = document.getElementById("nf-status").value
+  const competenciaMonth = document.getElementById("nf-competencia").value
+  const numeroRecibo = document.getElementById("nf-numero-recibo").value.trim()
   const numero = document.getElementById("nf-numero").value.trim()
   const serie = document.getElementById("nf-serie").value.trim()
   const dataEmissao = document.getElementById("nf-data-emissao").value
   const dataPagamento = document.getElementById("nf-data-pagamento").value
-  const valorRaw = document.getElementById("nf-valor").value
+  const valorBrutoRaw = document.getElementById("nf-valor-bruto").value
+  const valorLiquidoRaw = document.getElementById("nf-valor-liquido").value
+  const valorPagoRaw = document.getElementById("nf-valor-pago").value
+  const formaPagamento = document.getElementById("nf-forma-pagamento").value
+  const campanhaAgentes = document.getElementById("nf-campanha-agentes").value.trim()
   const observacoes = document.getElementById("nf-observacoes").value.trim()
+
+  const payload = {
+    status,
+    competencia: competenciaMonth ? `${competenciaMonth}-01` : null,
+    numero_recibo: numeroRecibo || null,
+    numero: numero || null,
+    serie: serie || null,
+    data_emissao: dataEmissao || null,
+    data_pagamento: dataPagamento || null,
+    valor_bruto: valorBrutoRaw === "" ? null : Number(valorBrutoRaw),
+    valor_liquido: valorLiquidoRaw === "" ? null : Number(valorLiquidoRaw),
+    valor_pago: valorPagoRaw === "" ? null : Number(valorPagoRaw),
+    forma_pagamento: formaPagamento || null,
+    campanha_agentes: campanhaAgentes || null,
+    observacoes: observacoes || null,
+  }
 
   try {
     showLoading()
     if (notaId) {
-      await api.updateNotaFiscalRegistro(notaId, {
-        status,
-        numero: numero || null,
-        serie: serie || null,
-        data_emissao: dataEmissao || null,
-        data_pagamento: dataPagamento || null,
-        valor: valorRaw === "" ? null : Number(valorRaw),
-        observacoes: observacoes || null,
-      })
+      await api.updateNotaFiscalRegistro(notaId, payload)
     } else {
-      await api.createContratoNotaFiscal(contratoId, {
-        tipo: "unica",
-        status,
-        numero: numero || null,
-        serie: serie || null,
-        data_emissao: dataEmissao || null,
-        data_pagamento: dataPagamento || null,
-        valor: valorRaw === "" ? null : Number(valorRaw),
-        observacoes: observacoes || null,
-      })
+      await api.createContratoNotaFiscal(contratoId, { tipo: "unica", ...payload })
     }
     closeModal()
     showToast("Nota fiscal salva", "success")
@@ -955,10 +970,15 @@ async function showFaturamentoMensalModal(contratoId) {
   document.getElementById("faturamento-filtro-status").value = ""
   _getCompetenciaInputOrCurrent()
   document.getElementById("faturamento-status-inicial").value = "pendente"
+  document.getElementById("faturamento-numero-recibo").value = ""
   document.getElementById("faturamento-numero-nf").value = ""
   document.getElementById("faturamento-data-emissao").value = ""
   document.getElementById("faturamento-data-pagamento").value = ""
-  document.getElementById("faturamento-valor").value = ""
+  document.getElementById("faturamento-valor-bruto").value = ""
+  document.getElementById("faturamento-valor-liquido").value = ""
+  document.getElementById("faturamento-valor-pago").value = ""
+  document.getElementById("faturamento-forma-pagamento").value = ""
+  document.getElementById("faturamento-campanha-agentes").value = ""
   document.getElementById("faturamento-observacoes").value = ""
 
   openModal("modal-faturamento-mensal")
@@ -991,7 +1011,7 @@ function renderFaturamentosMensais(items) {
   if (!tbody) return
 
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Sem faturamentos mensais</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="13" class="text-center">Sem faturamentos mensais</td></tr>'
     return
   }
 
@@ -1000,14 +1020,27 @@ function renderFaturamentosMensais(items) {
       (f) => `
       <tr data-faturamento-id="${f.id}">
         <td>${_formatCompetencia(f.competencia)}</td>
-        <td>${_getStatusNfMensalBadge(f.status_nf)}</td>
-        <td><input type="text" class="faturamento-numero-nf" value="${escapeHtml(f.numero_nf || "")}" /></td>
-        <td><input type="date" class="faturamento-data-emissao" value="${f.data_emissao_nf || ""}" /></td>
-        <td><input type="date" class="faturamento-data-pagamento" value="${f.data_pagamento_nf || ""}" /></td>
-        <td><input type="number" min="0" step="0.01" class="faturamento-valor" value="${f.valor_cobrado ?? ""}" /></td>
+        <td>${_getStatusNfMensalBadge(f.status)}</td>
+        <td><input type="text" class="faturamento-numero-recibo" value="${escapeHtml(f.numero_recibo || "")}" placeholder="Recibo" /></td>
+        <td><input type="text" class="faturamento-numero-nf" value="${escapeHtml(f.numero || "")}" /></td>
+        <td><input type="date" class="faturamento-data-emissao" value="${f.data_emissao || ""}" /></td>
+        <td><input type="date" class="faturamento-data-pagamento" value="${f.data_pagamento || ""}" /></td>
+        <td><input type="number" min="0" step="0.01" class="faturamento-valor-bruto" value="${f.valor_bruto ?? ""}" /></td>
+        <td><input type="number" min="0" step="0.01" class="faturamento-valor-liquido" value="${f.valor_liquido ?? ""}" /></td>
+        <td><input type="number" min="0" step="0.01" class="faturamento-valor-pago" value="${f.valor_pago ?? ""}" /></td>
+        <td>
+          <select class="faturamento-forma-pagamento">
+            <option value="">—</option>
+            <option value="Caixa Seara" ${f.forma_pagamento === "Caixa Seara" ? "selected" : ""}>Caixa Seara</option>
+            <option value="CC Banco do Brasil" ${f.forma_pagamento === "CC Banco do Brasil" ? "selected" : ""}>CC Banco do Brasil</option>
+            <option value="CC Bradesco" ${f.forma_pagamento === "CC Bradesco" ? "selected" : ""}>CC Bradesco</option>
+            <option value="Gerência Net" ${f.forma_pagamento === "Gerência Net" ? "selected" : ""}>Gerência Net</option>
+          </select>
+        </td>
+        <td><input type="text" class="faturamento-campanha-agentes" value="${escapeHtml(f.campanha_agentes || "")}" placeholder="Campanha/Ag." /></td>
         <td>
           <select class="faturamento-status-nf">
-            ${_buildStatusMensalOptions(f.status_nf)}
+            ${_buildStatusMensalOptions(f.status)}
           </select>
           <input type="text" class="faturamento-observacoes" value="${escapeHtml(f.observacoes || "")}" placeholder="Observações" />
         </td>
@@ -1027,22 +1060,32 @@ async function criarFaturamentoMensalManual() {
   if (!contratoId) return
 
   const competencia = _getCompetenciaInputOrCurrent()
-  const statusNf = document.getElementById("faturamento-status-inicial")?.value || "pendente"
-  const numeroNf = document.getElementById("faturamento-numero-nf")?.value.trim() || null
+  const status = document.getElementById("faturamento-status-inicial")?.value || "pendente"
+  const numeroRecibo = document.getElementById("faturamento-numero-recibo")?.value.trim() || null
+  const numero = document.getElementById("faturamento-numero-nf")?.value.trim() || null
   const dataEmissao = document.getElementById("faturamento-data-emissao")?.value || null
   const dataPagamento = document.getElementById("faturamento-data-pagamento")?.value || null
-  const valorRaw = document.getElementById("faturamento-valor")?.value
+  const valorBrutoRaw = document.getElementById("faturamento-valor-bruto")?.value
+  const valorLiquidoRaw = document.getElementById("faturamento-valor-liquido")?.value
+  const valorPagoRaw = document.getElementById("faturamento-valor-pago")?.value
+  const formaPagamento = document.getElementById("faturamento-forma-pagamento")?.value || null
+  const campanhaAgentes = document.getElementById("faturamento-campanha-agentes")?.value.trim() || null
   const observacoes = document.getElementById("faturamento-observacoes")?.value.trim() || null
 
   try {
     showLoading()
     await api.createContratoFaturamentoMensal(contratoId, {
       competencia: _competenciaMonthToDateString(competencia),
-      status_nf: statusNf,
-      numero_nf: numeroNf,
-      data_emissao_nf: dataEmissao,
-      data_pagamento_nf: dataPagamento,
-      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      status,
+      numero_recibo: numeroRecibo,
+      numero,
+      data_emissao: dataEmissao,
+      data_pagamento: dataPagamento,
+      valor_bruto: valorBrutoRaw === "" ? null : Number(valorBrutoRaw),
+      valor_liquido: valorLiquidoRaw === "" ? null : Number(valorLiquidoRaw),
+      valor_pago: valorPagoRaw === "" ? null : Number(valorPagoRaw),
+      forma_pagamento: formaPagamento,
+      campanha_agentes: campanhaAgentes,
       observacoes,
     })
     showToast("Faturamento mensal criado", "success")
@@ -1062,7 +1105,7 @@ async function emitirNotaFiscalMensalAtual() {
   const competencia = _getCompetenciaInputOrCurrent()
   const numeroNf = document.getElementById("faturamento-numero-nf")?.value.trim()
   const dataEmissao = document.getElementById("faturamento-data-emissao")?.value || null
-  const valorRaw = document.getElementById("faturamento-valor")?.value
+  const valorBrutoRaw = document.getElementById("faturamento-valor-bruto")?.value
   const observacoes = document.getElementById("faturamento-observacoes")?.value.trim() || null
 
   if (!numeroNf) {
@@ -1075,7 +1118,7 @@ async function emitirNotaFiscalMensalAtual() {
     await api.emitirNotaFiscalMensal(contratoId, competencia, {
       numero_nf: numeroNf,
       data_emissao_nf: dataEmissao,
-      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      valor_bruto: valorBrutoRaw === "" ? null : Number(valorBrutoRaw),
       observacoes,
     })
     showToast("NF mensal emitida", "success")
@@ -1092,21 +1135,31 @@ async function salvarFaturamentoMensal(faturamentoId) {
   const row = document.querySelector(`tr[data-faturamento-id="${faturamentoId}"]`)
   if (!row) return
 
-  const statusNf = row.querySelector(".faturamento-status-nf")?.value || "pendente"
-  const numeroNf = row.querySelector(".faturamento-numero-nf")?.value.trim() || null
+  const status = row.querySelector(".faturamento-status-nf")?.value || "pendente"
+  const numeroRecibo = row.querySelector(".faturamento-numero-recibo")?.value.trim() || null
+  const numero = row.querySelector(".faturamento-numero-nf")?.value.trim() || null
   const dataEmissao = row.querySelector(".faturamento-data-emissao")?.value || null
   const dataPagamento = row.querySelector(".faturamento-data-pagamento")?.value || null
-  const valorRaw = row.querySelector(".faturamento-valor")?.value
+  const valorBrutoRaw = row.querySelector(".faturamento-valor-bruto")?.value
+  const valorLiquidoRaw = row.querySelector(".faturamento-valor-liquido")?.value
+  const valorPagoRaw = row.querySelector(".faturamento-valor-pago")?.value
+  const formaPagamento = row.querySelector(".faturamento-forma-pagamento")?.value || null
+  const campanhaAgentes = row.querySelector(".faturamento-campanha-agentes")?.value.trim() || null
   const observacoes = row.querySelector(".faturamento-observacoes")?.value.trim() || null
 
   try {
     showLoading()
     await api.updateFaturamentoMensal(faturamentoId, {
-      status_nf: statusNf,
-      numero_nf: numeroNf,
-      data_emissao_nf: dataEmissao,
-      data_pagamento_nf: dataPagamento,
-      valor_cobrado: valorRaw === "" ? null : Number(valorRaw),
+      status,
+      numero_recibo: numeroRecibo,
+      numero,
+      data_emissao: dataEmissao,
+      data_pagamento: dataPagamento,
+      valor_bruto: valorBrutoRaw === "" ? null : Number(valorBrutoRaw),
+      valor_liquido: valorLiquidoRaw === "" ? null : Number(valorLiquidoRaw),
+      valor_pago: valorPagoRaw === "" ? null : Number(valorPagoRaw),
+      forma_pagamento: formaPagamento,
+      campanha_agentes: campanhaAgentes,
       observacoes,
     })
     showToast("Faturamento mensal atualizado", "success")

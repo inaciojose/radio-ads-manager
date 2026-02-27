@@ -89,7 +89,10 @@ def _sincronizar_resumo_nf_contrato(db: Session, contrato: models.Contrato) -> N
         return
 
     if contrato.nf_dinamica == "unica":
-        nota_unica = next((n for n in notas if n.tipo == "unica"), None)
+        # NFs canceladas preservam dados no banco mas não afetam o resumo do contrato
+        nota_unica = next(
+            (n for n in notas if n.tipo == "unica" and n.status != "cancelada"), None
+        )
         if not nota_unica:
             contrato.status_nf = "pendente"
             contrato.numero_nf = None
@@ -100,12 +103,14 @@ def _sincronizar_resumo_nf_contrato(db: Session, contrato: models.Contrato) -> N
         contrato.data_emissao_nf = nota_unica.data_emissao
         return
 
-    statuses = [n.status for n in notas if n.tipo == "mensal"]
-    if not statuses:
+    # Para mensal: apenas NFs não canceladas entram no resumo do contrato
+    notas_validas = [n for n in notas if n.tipo == "mensal" and n.status != "cancelada"]
+    if not notas_validas:
         contrato.status_nf = "pendente"
         contrato.numero_nf = None
         contrato.data_emissao_nf = None
         return
+    statuses = [n.status for n in notas_validas]
     if all(s == "paga" for s in statuses):
         contrato.status_nf = "paga"
     elif any(s in {"emitida", "paga"} for s in statuses):
@@ -113,9 +118,42 @@ def _sincronizar_resumo_nf_contrato(db: Session, contrato: models.Contrato) -> N
     else:
         contrato.status_nf = "pendente"
 
-    nota_ref = next((n for n in notas if n.tipo == "mensal" and n.numero), None)
+    nota_ref = next((n for n in notas_validas if n.numero), None)
     contrato.numero_nf = nota_ref.numero if nota_ref else None
     contrato.data_emissao_nf = nota_ref.data_emissao if nota_ref else None
+
+
+def _validar_unicidade_numero_nf(
+    db: Session,
+    numero: Optional[str],
+    numero_recibo: Optional[str],
+    nota_id_atual: Optional[int] = None,
+) -> None:
+    """Garante que numero e numero_recibo sejam unicos entre NFs nao canceladas."""
+    if numero:
+        q = db.query(models.NotaFiscal).filter(
+            models.NotaFiscal.numero == numero,
+            models.NotaFiscal.status != "cancelada",
+        )
+        if nota_id_atual:
+            q = q.filter(models.NotaFiscal.id != nota_id_atual)
+        if q.first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ja existe uma nota fiscal ativa com o numero '{numero}'.",
+            )
+    if numero_recibo:
+        q = db.query(models.NotaFiscal).filter(
+            models.NotaFiscal.numero_recibo == numero_recibo,
+            models.NotaFiscal.status != "cancelada",
+        )
+        if nota_id_atual:
+            q = q.filter(models.NotaFiscal.id != nota_id_atual)
+        if q.first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ja existe uma nota fiscal ativa com o numero de recibo '{numero_recibo}'.",
+            )
 
 
 def _validar_tipo_nota_para_contrato(contrato: models.Contrato, tipo_nota: str) -> None:
@@ -907,6 +945,8 @@ def criar_nota_fiscal_contrato(
     if payload.tipo == "mensal":
         _validar_competencia_no_periodo_contrato(contrato, payload.competencia)
 
+    _validar_unicidade_numero_nf(db, payload.numero, payload.numero_recibo)
+
     nota = models.NotaFiscal(
         contrato_id=contrato_id,
         tipo=payload.tipo,
@@ -916,7 +956,12 @@ def criar_nota_fiscal_contrato(
         serie=payload.serie,
         data_emissao=payload.data_emissao,
         data_pagamento=payload.data_pagamento,
-        valor=payload.valor,
+        numero_recibo=payload.numero_recibo,
+        valor_bruto=payload.valor_bruto,
+        valor_liquido=payload.valor_liquido,
+        valor_pago=payload.valor_pago,
+        forma_pagamento=payload.forma_pagamento,
+        campanha_agentes=payload.campanha_agentes,
         observacoes=payload.observacoes,
     )
     db.add(nota)
@@ -953,6 +998,14 @@ def atualizar_nota_fiscal(
         )
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    _validar_unicidade_numero_nf(
+        db,
+        update_data.get("numero"),
+        update_data.get("numero_recibo"),
+        nota_id_atual=nota.id,
+    )
+
     for field, value in update_data.items():
         setattr(nota, field, value)
 
@@ -1037,7 +1090,12 @@ def criar_faturamento_mensal_contrato(
         serie=payload.serie,
         data_emissao=payload.data_emissao,
         data_pagamento=payload.data_pagamento,
-        valor=payload.valor,
+        numero_recibo=payload.numero_recibo,
+        valor_bruto=payload.valor_bruto,
+        valor_liquido=payload.valor_liquido,
+        valor_pago=payload.valor_pago,
+        forma_pagamento=payload.forma_pagamento,
+        campanha_agentes=payload.campanha_agentes,
         observacoes=payload.observacoes,
     )
 
@@ -1091,8 +1149,8 @@ def emitir_nota_fiscal_mensal_contrato(
     nota.status = "emitida"
     nota.numero = payload.numero_nf
     nota.data_emissao = payload.data_emissao_nf or date.today()
-    if payload.valor_cobrado is not None:
-        nota.valor = payload.valor_cobrado
+    if payload.valor_bruto is not None:
+        nota.valor_bruto = payload.valor_bruto
     if payload.observacoes is not None:
         nota.observacoes = payload.observacoes
 
