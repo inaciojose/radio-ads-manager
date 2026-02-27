@@ -267,6 +267,7 @@ class NotaFiscalListItem(BaseModel):
     competencia: Optional[date] = None
     status: str
     numero: Optional[str] = None
+    serie: Optional[str] = None
     data_emissao: Optional[date] = None
     data_pagamento: Optional[date] = None
     numero_recibo: Optional[str] = None

@@ -883,7 +883,13 @@ async function saveNotaFiscal() {
     }
     closeModal()
     showToast("Nota fiscal salva", "success")
-    await loadContratos(contratosState.page)
+    if (window._nfSaveCallback) {
+      const cb = window._nfSaveCallback
+      window._nfSaveCallback = null
+      await cb()
+    } else {
+      await loadContratos(contratosState.page)
+    }
   } catch (error) {
     showToast(error.message || "Erro ao salvar nota fiscal", "error")
   } finally {
