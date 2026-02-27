@@ -844,7 +844,7 @@
     <div id="modal-faturamento-mensal" class="modal modal-wide">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Faturamento Mensal</h3>
+          <h3>Faturamento Mensal — <span id="faturamento-contrato-label">Contrato</span></h3>
           <button class="btn-close" onclick="closeModal()">
             <i class="fas fa-times"></i>
           </button>
@@ -852,29 +852,26 @@
         <div class="modal-body">
           <input type="hidden" id="faturamento-contrato-id" />
 
-          <div class="card" style="margin-bottom: 1rem">
-            <h4 id="faturamento-contrato-label">Contrato</h4>
+          <!-- Abas -->
+          <div class="nf-tabs">
+            <button class="nf-tab-btn active" data-tab="nova" onclick="switchFaturamentoTab('nova')">
+              <i class="fas fa-file-invoice"></i> Emitir / Registrar
+            </button>
+            <button class="nf-tab-btn" data-tab="historico" onclick="switchFaturamentoTab('historico')">
+              <i class="fas fa-history"></i> Histórico
+            </button>
+          </div>
+
+          <!-- Aba: Emitir / Registrar -->
+          <div class="nf-tab-panel active" id="faturamento-tab-nova">
             <div class="form-row">
               <div class="form-group">
-                <label>Competência (YYYY-MM)</label>
+                <label>Competência</label>
                 <input type="month" id="faturamento-competencia" />
               </div>
               <div class="form-group">
-                <label>Filtro por Status</label>
-                <select id="faturamento-filtro-status">
-                  <option value="">Todos</option>
-                  <option value="pendente">Pendente</option>
-                  <option value="emitida">Emitida</option>
-                  <option value="paga">Paga</option>
-                  <option value="cancelada">Cancelada</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Status Inicial (criação manual)</label>
+                <label>Status</label>
                 <select id="faturamento-status-inicial">
-                  <option value="pendente">Pendente</option>
                   <option value="emitida">Emitida</option>
                   <option value="paga">Paga</option>
                   <option value="cancelada">Cancelada</option>
@@ -884,18 +881,16 @@
                 <label>Número do Recibo</label>
                 <input type="text" id="faturamento-numero-recibo" />
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Número NF</label>
                 <input type="text" id="faturamento-numero-nf" />
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Data Emissão</label>
                 <input type="date" id="faturamento-data-emissao" />
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Data Pagamento</label>
                 <input type="date" id="faturamento-data-pagamento" />
@@ -904,18 +899,16 @@
                 <label>Valor Bruto (R$)</label>
                 <input type="number" step="0.01" min="0" id="faturamento-valor-bruto" />
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Valor Líquido (R$)</label>
                 <input type="number" step="0.01" min="0" id="faturamento-valor-liquido" />
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Valor Pago (R$)</label>
                 <input type="number" step="0.01" min="0" id="faturamento-valor-pago" />
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Forma de Pagamento</label>
                 <select id="faturamento-forma-pagamento">
@@ -930,55 +923,63 @@
                 <label>Campanha / Agentes</label>
                 <input type="text" id="faturamento-campanha-agentes" placeholder="Ex: Brasil Seguro" />
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Observações</label>
                 <input type="text" id="faturamento-observacoes" />
               </div>
             </div>
             <div class="faturamento-mensal-actions">
-              <button class="btn btn-secondary" type="button" onclick="loadFaturamentosMensais()">
-                <i class="fas fa-sync-alt"></i> Atualizar Lista
-              </button>
-              <button class="btn btn-primary" type="button" onclick="criarFaturamentoMensalManual()">
+              <button class="btn btn-sm btn-outline-secondary" type="button" onclick="criarFaturamentoMensalManual()">
                 <i class="fas fa-plus"></i> Criar Competência
               </button>
-              <button class="btn btn-success" type="button" onclick="emitirNotaFiscalMensalAtual()">
+              <button class="btn btn-primary" type="button" onclick="emitirNotaFiscalMensalAtual()">
                 <i class="fas fa-file-invoice"></i> Emitir NF
               </button>
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="table" id="table-faturamentos-mensais">
-              <thead>
-                <tr>
-                  <th>Competência</th>
-                  <th>Status</th>
-                  <th>Recibo</th>
-                  <th>Número NF</th>
-                  <th>Emissão</th>
-                  <th>Pagamento</th>
-                  <th>Valor Bruto</th>
-                  <th>Vlr. Líquido</th>
-                  <th>Vlr. Pago</th>
-                  <th>Forma Pgto.</th>
-                  <th>Campanha/Ag.</th>
-                  <th>Edição</th>
-                  <th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colspan="13" class="text-center">Carregando...</td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- Aba: Histórico -->
+          <div class="nf-tab-panel" id="faturamento-tab-historico">
+            <div class="faturamento-historico-filtros">
+              <input type="month" id="historico-filtro-competencia" title="Filtrar por competência" />
+              <select id="faturamento-filtro-status">
+                <option value="">Todos os status</option>
+                <option value="pendente">Pendente</option>
+                <option value="emitida">Emitida</option>
+                <option value="paga">Paga</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="loadFaturamentosMensais()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+              </button>
+            </div>
+            <div class="table-responsive historico-table-scroll">
+              <table class="table" id="table-faturamentos-mensais">
+                <thead>
+                  <tr>
+                    <th>Competência</th>
+                    <th>Status</th>
+                    <th>Recibo</th>
+                    <th>Número NF</th>
+                    <th>Emissão</th>
+                    <th>Pagamento</th>
+                    <th>Valor Bruto</th>
+                    <th>Vlr. Líquido</th>
+                    <th>Vlr. Pago</th>
+                    <th>Forma Pgto.</th>
+                    <th>Campanha/Ag.</th>
+                    <th>Edição</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="13" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
         </div>
       </div>
     </div>

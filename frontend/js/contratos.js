@@ -956,6 +956,15 @@ function _buildStatusMensalOptions(selected) {
     .join("")
 }
 
+function switchFaturamentoTab(tab) {
+  document.querySelectorAll("#modal-faturamento-mensal .nf-tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab)
+  })
+  document.querySelectorAll("#modal-faturamento-mensal .nf-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `faturamento-tab-${tab}`)
+  })
+}
+
 async function showFaturamentoMensalModal(contratoId) {
   if (!requireWriteAccess()) return
   const contrato = contratosCache.find((c) => c.id === Number(contratoId)) || (await api.getContrato(contratoId))
@@ -973,9 +982,10 @@ async function showFaturamentoMensalModal(contratoId) {
 
   document.getElementById("faturamento-contrato-id").value = String(contrato.id)
   document.getElementById("faturamento-contrato-label").textContent = `Contrato ${faturamentoMensalState.contratoNumero}`
+  document.getElementById("historico-filtro-competencia").value = ""
   document.getElementById("faturamento-filtro-status").value = ""
   _getCompetenciaInputOrCurrent()
-  document.getElementById("faturamento-status-inicial").value = "pendente"
+  document.getElementById("faturamento-status-inicial").value = "emitida"
   document.getElementById("faturamento-numero-recibo").value = ""
   document.getElementById("faturamento-numero-nf").value = ""
   document.getElementById("faturamento-data-emissao").value = ""
@@ -987,6 +997,7 @@ async function showFaturamentoMensalModal(contratoId) {
   document.getElementById("faturamento-campanha-agentes").value = ""
   document.getElementById("faturamento-observacoes").value = ""
 
+  switchFaturamentoTab("nova")
   openModal("modal-faturamento-mensal")
   await loadFaturamentosMensais()
 }
@@ -995,7 +1006,7 @@ async function loadFaturamentosMensais() {
   const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
   if (!contratoId) return
 
-  const competencia = (document.getElementById("faturamento-competencia")?.value || "").trim()
+  const competencia = (document.getElementById("historico-filtro-competencia")?.value || "").trim()
   const statusNf = document.getElementById("faturamento-filtro-status")?.value
 
   try {
@@ -1060,10 +1071,50 @@ function renderFaturamentosMensais(items) {
     .join("")
 }
 
+function _validarCamposEmitirRegistrar() {
+  const erros = []
+
+  const obrigatorios = [
+    { id: "faturamento-competencia", label: "Competência" },
+    { id: "faturamento-status-inicial", label: "Status" },
+    { id: "faturamento-numero-recibo", label: "Número do Recibo" },
+    { id: "faturamento-numero-nf", label: "Número NF" },
+    { id: "faturamento-data-emissao", label: "Data Emissão" },
+    { id: "faturamento-valor-bruto", label: "Valor Bruto" },
+  ]
+
+  for (const campo of obrigatorios) {
+    const el = document.getElementById(campo.id)
+    if (!el || !String(el.value).trim()) erros.push(campo.label)
+  }
+
+  const status = document.getElementById("faturamento-status-inicial")?.value
+  if (status === "paga") {
+    const obrigatoriosPaga = [
+      { id: "faturamento-data-pagamento", label: "Data de Pagamento" },
+      { id: "faturamento-valor-liquido", label: "Valor Líquido" },
+      { id: "faturamento-valor-pago", label: "Valor Pago" },
+      { id: "faturamento-forma-pagamento", label: "Forma de Pagamento" },
+    ]
+    for (const campo of obrigatoriosPaga) {
+      const el = document.getElementById(campo.id)
+      if (!el || !String(el.value).trim()) erros.push(campo.label)
+    }
+  }
+
+  if (erros.length > 0) {
+    showToast(`Campos obrigatórios não preenchidos: ${erros.join(", ")}`, "warning")
+    return false
+  }
+
+  return true
+}
+
 async function criarFaturamentoMensalManual() {
   if (!requireWriteAccess()) return
   const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
   if (!contratoId) return
+  if (!_validarCamposEmitirRegistrar()) return
 
   const competencia = _getCompetenciaInputOrCurrent()
   const status = document.getElementById("faturamento-status-inicial")?.value || "pendente"
@@ -1095,6 +1146,7 @@ async function criarFaturamentoMensalManual() {
       observacoes,
     })
     showToast("Faturamento mensal criado", "success")
+    switchFaturamentoTab("historico")
     await loadFaturamentosMensais()
   } catch (error) {
     showToast(error.message || "Erro ao criar faturamento mensal", "error")
@@ -1107,27 +1159,38 @@ async function emitirNotaFiscalMensalAtual() {
   if (!requireWriteAccess()) return
   const contratoId = Number(document.getElementById("faturamento-contrato-id")?.value)
   if (!contratoId) return
+  if (!_validarCamposEmitirRegistrar()) return
 
   const competencia = _getCompetenciaInputOrCurrent()
   const numeroNf = document.getElementById("faturamento-numero-nf")?.value.trim()
+  const status = document.getElementById("faturamento-status-inicial")?.value || "emitida"
+  const numeroRecibo = document.getElementById("faturamento-numero-recibo")?.value.trim() || null
   const dataEmissao = document.getElementById("faturamento-data-emissao")?.value || null
+  const dataPagamento = document.getElementById("faturamento-data-pagamento")?.value || null
   const valorBrutoRaw = document.getElementById("faturamento-valor-bruto")?.value
+  const valorLiquidoRaw = document.getElementById("faturamento-valor-liquido")?.value
+  const valorPagoRaw = document.getElementById("faturamento-valor-pago")?.value
+  const formaPagamento = document.getElementById("faturamento-forma-pagamento")?.value || null
+  const campanhaAgentes = document.getElementById("faturamento-campanha-agentes")?.value.trim() || null
   const observacoes = document.getElementById("faturamento-observacoes")?.value.trim() || null
-
-  if (!numeroNf) {
-    showToast("Informe o número da NF para emitir", "warning")
-    return
-  }
 
   try {
     showLoading()
     await api.emitirNotaFiscalMensal(contratoId, competencia, {
       numero_nf: numeroNf,
+      status,
+      numero_recibo: numeroRecibo,
       data_emissao_nf: dataEmissao,
+      data_pagamento: dataPagamento,
       valor_bruto: valorBrutoRaw === "" ? null : Number(valorBrutoRaw),
+      valor_liquido: valorLiquidoRaw === "" ? null : Number(valorLiquidoRaw),
+      valor_pago: valorPagoRaw === "" ? null : Number(valorPagoRaw),
+      forma_pagamento: formaPagamento,
+      campanha_agentes: campanhaAgentes,
       observacoes,
     })
     showToast("NF mensal emitida", "success")
+    switchFaturamentoTab("historico")
     await loadFaturamentosMensais()
   } catch (error) {
     showToast(error.message || "Erro ao emitir NF mensal", "error")

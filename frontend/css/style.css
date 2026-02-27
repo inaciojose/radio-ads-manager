@@ -740,10 +740,62 @@ body.sidebar-collapsed #api-status-text {
   user-select: none;
 }
 
+.nf-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--gray-light);
+  margin-bottom: 1.25rem;
+}
+
+.nf-tab-btn {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gray);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  border-radius: 4px 4px 0 0;
+}
+
+.nf-tab-btn:hover {
+  color: var(--primary);
+  background: var(--gray-lighter);
+}
+
+.nf-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.nf-tab-panel {
+  display: none;
+}
+
+.nf-tab-panel.active {
+  display: block;
+}
+
+.faturamento-historico-filtros {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
 .faturamento-mensal-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  margin-top: 0.75rem;
+  justify-content: flex-end;
 }
 
 #table-faturamentos-mensais input,
@@ -787,6 +839,24 @@ body.sidebar-collapsed #api-status-text {
 .modal.modal-wide {
   max-width: 1100px;
   width: 96%;
+}
+
+#modal-faturamento-mensal {
+  max-width: 1300px;
+}
+
+#modal-faturamento-mensal .modal-body {
+  max-height: 80vh;
+  min-height: 65vh;
+}
+
+#modal-faturamento-mensal .nf-tab-panel.active {
+  min-height: 50vh;
+}
+
+.historico-table-scroll {
+  max-height: 52vh;
+  overflow-y: auto;
 }
 
 .modal.active {
