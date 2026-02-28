@@ -5,6 +5,27 @@
 let _veiculacoesAll = []
 let _activeFreq = null
 
+// ============================================
+// Abas da página de Veiculações
+// ============================================
+
+function switchVeiculacoesTab(tab) {
+  document.querySelectorAll("#page-veiculacoes .vei-tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab)
+  })
+  document.querySelectorAll("#page-veiculacoes .vei-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `vei-tab-${tab}`)
+  })
+
+  if (tab === "nao-contabilizadas") {
+    loadNaoContabilizadas()
+  }
+}
+
+// ============================================
+// Aba: Veiculações do Dia
+// ============================================
+
 async function loadVeiculacoes() {
   const data = document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
   if (document.getElementById("filter-veiculacao-data")) {
@@ -99,6 +120,68 @@ async function processarVeiculacoes() {
     hideLoading()
   }
 }
+
+// ============================================
+// Aba: Não Contabilizadas
+// ============================================
+
+async function loadNaoContabilizadas() {
+  const dataInicio = document.getElementById("filter-nao-cont-inicio")?.value
+  const dataFim = document.getElementById("filter-nao-cont-fim")?.value
+  const frequencia = document.getElementById("filter-nao-cont-freq")?.value
+
+  const params = {}
+  if (dataInicio) params.data_inicio = dataInicio
+  if (dataFim) params.data_fim = dataFim
+  if (frequencia) params.frequencia = frequencia
+
+  try {
+    showLoading()
+    const items = await api.getNaoContabilizadas(params)
+    renderNaoContabilizadas(items || [])
+  } catch (error) {
+    showToast(error.message || "Erro ao carregar não contabilizadas", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+function renderNaoContabilizadas(items) {
+  const tbody = document.querySelector("#table-nao-contabilizadas tbody")
+  if (!tbody) return
+
+  if (!items.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="5" class="text-center">Nenhuma veiculação não contabilizada no período</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = items
+    .map((v) => {
+      const nomeArquivo = v.arquivo_nome
+        ? escapeHtml(v.arquivo_nome)
+        : `<span class="text-muted" title="Nome original: ${escapeHtml(v.nome_arquivo_raw || "")}">${escapeHtml(v.nome_arquivo_raw || "-")} <small>(não cadastrado)</small></span>`
+
+      const clienteCell = v.cliente_nome
+        ? escapeHtml(v.cliente_nome)
+        : `<span class="text-muted">—</span>`
+
+      return `
+      <tr>
+        <td>${formatDateTime(v.data_hora)}</td>
+        <td>${escapeHtml(v.frequencia || "-")}</td>
+        <td>${nomeArquivo}</td>
+        <td>${clienteCell}</td>
+        <td><span class="badge badge-warning">${escapeHtml(v.motivo)}</span></td>
+      </tr>
+    `
+    })
+    .join("")
+}
+
+// ============================================
+// Modal: Lançamento em Lote
+// ============================================
 
 async function showLoteVeiculacaoModal() {
   if (!requireWriteAccess()) return

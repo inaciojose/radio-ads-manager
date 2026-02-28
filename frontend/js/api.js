@@ -532,6 +532,11 @@ class API {
     )
   }
 
+  async getNaoContabilizadas(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/veiculacoes/nao-contabilizadas${query ? "?" + query : ""}`)
+  }
+
   // ============================================
   // Arquivos
   // ============================================

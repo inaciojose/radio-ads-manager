@@ -1138,6 +1138,54 @@ body.sidebar-collapsed #api-status-text {
 }
 
 /* ============================================
+   VEICULAÇÕES PAGE - LAYOUT
+   ============================================ */
+
+.vei-dia-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem 0;
+}
+
+.vei-dia-header .date-filter {
+  display: flex;
+  align-items: center;
+  padding-bottom: 0.5rem;
+}
+
+.vei-dia-header .freq-tabs {
+  flex: 1;
+  border-bottom: none;
+  padding: 0;
+}
+
+.nao-cont-filtros {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--gray-light);
+}
+
+.nao-cont-filtros label {
+  font-size: 0.85rem;
+  color: var(--gray);
+  white-space: nowrap;
+}
+
+.nao-cont-filtros input[type="date"],
+.nao-cont-filtros select {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--gray-light);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: var(--white);
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 

@@ -352,13 +352,6 @@
         <!-- Veiculações Page -->
         <div id="page-veiculacoes" class="page">
           <div class="page-header">
-            <div class="date-filter">
-              <input
-                type="date"
-                id="filter-veiculacao-data"
-                onchange="loadVeiculacoes()"
-              />
-            </div>
             <button class="btn btn-primary" data-requires-write="true" onclick="showLoteVeiculacaoModal()">
               <i class="fas fa-plus"></i> Lançar OBS em Lote
             </button>
@@ -367,31 +360,91 @@
             </button>
           </div>
 
-          <div class="card">
-            <div class="freq-tabs">
-              <button class="freq-tab active" onclick="setFreqTab(null, this)">Todas</button>
-              <button class="freq-tab" onclick="setFreqTab('102.7', this)">102.7</button>
-              <button class="freq-tab" onclick="setFreqTab('104.7', this)">104.7</button>
+          <!-- Abas da página -->
+          <div class="nf-tabs vei-page-tabs">
+            <button class="vei-tab-btn nf-tab-btn active" data-tab="dia" onclick="switchVeiculacoesTab('dia')">
+              <i class="fas fa-list"></i> Veiculações do Dia
+            </button>
+            <button class="vei-tab-btn nf-tab-btn" data-tab="nao-contabilizadas" onclick="switchVeiculacoesTab('nao-contabilizadas')">
+              <i class="fas fa-exclamation-triangle"></i> Não Contabilizadas
+            </button>
+          </div>
+
+          <!-- Aba: Veiculações do Dia -->
+          <div class="vei-tab-panel nf-tab-panel active" id="vei-tab-dia">
+            <div class="card">
+              <div class="vei-dia-header">
+                <div class="date-filter">
+                  <input
+                    type="date"
+                    id="filter-veiculacao-data"
+                    onchange="loadVeiculacoes()"
+                  />
+                </div>
+                <div class="freq-tabs">
+                  <button class="freq-tab active" onclick="setFreqTab(null, this)">Todas</button>
+                  <button class="freq-tab" onclick="setFreqTab('102.7', this)">102.7</button>
+                  <button class="freq-tab" onclick="setFreqTab('104.7', this)">104.7</button>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table" id="table-veiculacoes">
+                  <thead>
+                    <tr>
+                      <th>Horário</th>
+                      <th>Freq.</th>
+                      <th>Cliente</th>
+                      <th>Arquivo</th>
+                      <th>Programa</th>
+                      <th>Contrato</th>
+                      <th>Processado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="7" class="text-center">Carregando...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div class="table-responsive">
-              <table class="table" id="table-veiculacoes">
-                <thead>
-                  <tr>
-                    <th>Horário</th>
-                    <th>Freq.</th>
-                    <th>Cliente</th>
-                    <th>Arquivo</th>
-                    <th>Programa</th>
-                    <th>Contrato</th>
-                    <th>Processado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td colspan="7" class="text-center">Carregando...</td>
-                  </tr>
-                </tbody>
-              </table>
+          </div>
+
+          <!-- Aba: Não Contabilizadas -->
+          <div class="vei-tab-panel nf-tab-panel" id="vei-tab-nao-contabilizadas">
+            <div class="card">
+              <div class="nao-cont-filtros">
+                <label>De</label>
+                <input type="date" id="filter-nao-cont-inicio" />
+                <label>até</label>
+                <input type="date" id="filter-nao-cont-fim" />
+                <select id="filter-nao-cont-freq">
+                  <option value="">Todas as frequências</option>
+                  <option value="102.7">102.7</option>
+                  <option value="104.7">104.7</option>
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="loadNaoContabilizadas()">
+                  <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+              </div>
+              <div class="table-responsive">
+                <table class="table" id="table-nao-contabilizadas">
+                  <thead>
+                    <tr>
+                      <th>Data / Hora</th>
+                      <th>Freq.</th>
+                      <th>Arquivo</th>
+                      <th>Cliente</th>
+                      <th>Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="5" class="text-center">Selecione o período e clique em Atualizar</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
