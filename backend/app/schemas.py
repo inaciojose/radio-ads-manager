@@ -522,6 +522,19 @@ class VeiculacaoDetalhada(BaseModel):
     numero_contrato: Optional[str]
 
 
+class NaoContabilizadaItem(BaseModel):
+    """Item de veiculação processada mas não contabilizada."""
+    id: int
+    data_hora: datetime
+    frequencia: Optional[str]
+    nome_arquivo_raw: Optional[str]
+    arquivo_nome: Optional[str]
+    cliente_nome: Optional[str]
+    motivo: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ============================================
 # SCHEMAS: Relatórios e Estatísticas
 # ============================================

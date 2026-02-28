@@ -323,7 +323,8 @@ class Veiculacao(Base):
     fonte = Column(String(50), default="zara_log")  # De onde veio a informação
     processado = Column(Boolean, default=False, index=True)  # Se já foi contabilizado
     contabilizada = Column(Boolean, default=True, index=True)  # Se incrementou algum contador de contrato
-    
+    motivo_nao_contabilizada = Column(Text, nullable=True)  # Razão pela qual não foi contabilizada
+
     # Relacionamentos
     arquivo_audio = relationship("ArquivoAudio", back_populates="veiculacoes")
     contrato = relationship("Contrato", back_populates="veiculacoes")

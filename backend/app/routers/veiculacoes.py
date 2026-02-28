@@ -647,3 +647,76 @@ def listar_veiculacoes_detalhadas(
     ]
     
     return resultado
+
+
+@router.get("/nao-contabilizadas", response_model=List[schemas.NaoContabilizadaItem])
+def listar_nao_contabilizadas(
+    data_inicio: Optional[date] = Query(None, description="Data inicial (padrão: 30 dias atrás)"),
+    data_fim: Optional[date] = Query(None, description="Data final (padrão: hoje)"),
+    frequencia: Optional[str] = Query(None, description="Filtrar por frequência"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    """
+    Lista veiculações que foram processadas mas não contabilizadas
+    (processado=True, contabilizada=False).
+
+    Casos comuns:
+    - Arquivo de áudio não cadastrado no sistema
+    - Nenhum contrato ativo encontrado para o arquivo/frequência na data
+    """
+    if not data_inicio:
+        data_inicio = date.today() - timedelta(days=30)
+    if not data_fim:
+        data_fim = date.today()
+
+    inicio = datetime.combine(data_inicio, datetime.min.time())
+    fim = datetime.combine(data_fim, datetime.max.time())
+
+    query = (
+        db.query(
+            models.Veiculacao.id,
+            models.Veiculacao.data_hora,
+            models.Veiculacao.frequencia,
+            models.Veiculacao.nome_arquivo_raw,
+            models.Veiculacao.motivo_nao_contabilizada,
+            models.ArquivoAudio.nome_arquivo.label("arquivo_nome"),
+            models.Cliente.nome.label("cliente_nome"),
+        )
+        .outerjoin(models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id)
+        .outerjoin(models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id)
+        .filter(
+            models.Veiculacao.processado == True,  # noqa: E712
+            models.Veiculacao.contabilizada == False,  # noqa: E712
+            models.Veiculacao.data_hora.between(inicio, fim),
+        )
+    )
+
+    if frequencia:
+        query = query.filter(models.Veiculacao.frequencia == frequencia)
+
+    rows = query.order_by(models.Veiculacao.data_hora.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for v in rows:
+        motivo = v.motivo_nao_contabilizada
+        if not motivo:
+            if v.arquivo_nome is None:
+                motivo = "Arquivo não cadastrado no sistema"
+            else:
+                motivo = "Sem contrato ativo na data da veiculação"
+        result.append(
+            schemas.NaoContabilizadaItem(
+                id=v.id,
+                data_hora=v.data_hora,
+                frequencia=v.frequencia,
+                nome_arquivo_raw=v.nome_arquivo_raw,
+                arquivo_nome=v.arquivo_nome,
+                cliente_nome=v.cliente_nome,
+                motivo=motivo,
+            )
+        )
+
+    return result
