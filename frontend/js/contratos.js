@@ -293,10 +293,15 @@ function renderContratos(items, clientesPorId) {
       const monitoramentoResumo = monitoramentoResumoPorContrato[c.id]
       const sensitiveClass = isUnauthenticated ? "blur-unauth" : ""
 
+      const principalNome = c.comissionamentos?.find((cm) => cm.is_principal)?.responsavel?.nome
+
       return `
       <tr>
         <td>${escapeHtml(c.numero_contrato || "-")}</td>
-        <td>${escapeHtml(clientesPorId[c.cliente_id] || String(c.cliente_id))}</td>
+        <td>
+          ${escapeHtml(clientesPorId[c.cliente_id] || String(c.cliente_id))}
+          ${principalNome ? `<div><small style="color:#888;">${escapeHtml(principalNome)}</small></div>` : ""}
+        </td>
         <td>
           ${formatDate(c.data_inicio)} a ${c.data_fim ? formatDate(c.data_fim) : "Sem prazo"}
           ${!c.data_fim ? '<div><span class="badge badge-info">Recorrente</span></div>' : ""}
