@@ -656,6 +656,28 @@
               </table>
             </div>
           </div>
+
+          <!-- Seção de Comissões -->
+          <div class="card" style="margin-top: 1.5rem;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding: 1rem 1rem 0.5rem;">
+              <h3 style="margin:0; font-size:1.1rem;">Comissões do Mês</h3>
+              <input type="month" id="filter-comissoes-mes" onchange="loadComissoes()" style="padding:0.3rem 0.5rem;" />
+            </div>
+            <div class="table-responsive">
+              <table class="table" id="table-comissoes">
+                <thead>
+                  <tr>
+                    <th>Responsável</th>
+                    <th>Total a Receber</th>
+                    <th style="width:40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="3" class="text-center">Selecione um mês para ver as comissões</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- Notas Fiscais Page -->

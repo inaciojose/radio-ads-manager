@@ -9,6 +9,14 @@ let responsaveisCache = []
 // ============================================
 
 async function loadResponsaveis() {
+  // Inicializa o filtro de mês de comissões com o mês atual, se ainda não definido
+  const mesInput = document.getElementById("filter-comissoes-mes")
+  if (mesInput && !mesInput.value) {
+    const hoje = new Date()
+    mesInput.value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`
+    loadComissoes()
+  }
+
   const statusFiltro = document.getElementById("filter-responsavel-status")?.value
   try {
     showLoading()
@@ -163,6 +171,130 @@ function getResponsavelSelectOptions(selected = "") {
         `<option value="${r.id}"${String(r.id) === String(selected) ? " selected" : ""}>${escapeHtml(r.nome)}</option>`,
     )
     .join("")
+}
+
+// ============================================
+// Comissões
+// ============================================
+
+let _comissaoDetalheAberto = null  // responsavel_id atualmente expandido
+
+async function loadComissoes() {
+  const mes = document.getElementById("filter-comissoes-mes")?.value
+  const tbody = document.querySelector("#table-comissoes tbody")
+  if (!tbody) return
+
+  _comissaoDetalheAberto = null
+
+  if (!mes) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center">Selecione um mês para ver as comissões</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = '<tr><td colspan="3" class="text-center">Carregando...</td></tr>'
+  try {
+    const items = await api.getComissoes(mes)
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center">Nenhuma comissão registrada neste mês</td></tr>'
+      return
+    }
+    tbody.innerHTML = items
+      .map(
+        (item) => `
+        <tr class="comissao-row" style="cursor:pointer;" onclick="toggleComissaoDetalhe(${item.responsavel_id}, '${escapeHtml(item.responsavel_nome)}')">
+          <td>${escapeHtml(item.responsavel_nome)}</td>
+          <td><strong>${formatCurrency(item.total_comissao)}</strong></td>
+          <td style="text-align:center;"><i class="fas fa-chevron-down" id="comissao-icon-${item.responsavel_id}"></i></td>
+        </tr>
+        <tr id="comissao-detalhe-${item.responsavel_id}" style="display:none;">
+          <td colspan="3" style="padding:0; background:#f8f9fa;"></td>
+        </tr>`,
+      )
+      .join("")
+  } catch (error) {
+    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">${escapeHtml(error.message || "Erro ao carregar comissões")}</td></tr>`
+  }
+}
+
+async function toggleComissaoDetalhe(responsavelId, responsavelNome) {
+  const mes = document.getElementById("filter-comissoes-mes")?.value
+  if (!mes) return
+
+  const detalheRow = document.getElementById(`comissao-detalhe-${responsavelId}`)
+  const icon = document.getElementById(`comissao-icon-${responsavelId}`)
+  if (!detalheRow) return
+
+  // Fechar o que estava aberto (se for diferente)
+  if (_comissaoDetalheAberto !== null && _comissaoDetalheAberto !== responsavelId) {
+    const anteriorRow = document.getElementById(`comissao-detalhe-${_comissaoDetalheAberto}`)
+    const anteriorIcon = document.getElementById(`comissao-icon-${_comissaoDetalheAberto}`)
+    if (anteriorRow) anteriorRow.style.display = "none"
+    if (anteriorIcon) anteriorIcon.className = "fas fa-chevron-down"
+    _comissaoDetalheAberto = null
+  }
+
+  // Toggle do atual
+  if (detalheRow.style.display !== "none") {
+    detalheRow.style.display = "none"
+    if (icon) icon.className = "fas fa-chevron-down"
+    _comissaoDetalheAberto = null
+    return
+  }
+
+  // Abrir e carregar
+  const td = detalheRow.querySelector("td")
+  td.innerHTML = '<div style="padding:0.75rem; text-align:center;">Carregando...</div>'
+  detalheRow.style.display = ""
+  if (icon) icon.className = "fas fa-chevron-up"
+  _comissaoDetalheAberto = responsavelId
+
+  try {
+    const detalhe = await api.getComissaoDetalhe(responsavelId, mes)
+    td.innerHTML = _renderComissaoDetalhe(detalhe)
+  } catch (error) {
+    td.innerHTML = `<div style="padding:0.75rem; color:red;">${escapeHtml(error.message || "Erro ao carregar detalhe")}</div>`
+  }
+}
+
+function _renderComissaoDetalhe(detalhe) {
+  if (!detalhe.contratos.length) {
+    return '<div style="padding:0.75rem;">Nenhum contrato encontrado.</div>'
+  }
+
+  const linhas = detalhe.contratos
+    .map(
+      (c) => `
+      <tr>
+        <td>${escapeHtml(c.cliente_nome)}</td>
+        <td>${escapeHtml(c.numero_contrato || "-")}</td>
+        <td>${formatCurrency(c.valor_liquido)}</td>
+        <td>${c.percentagem != null ? c.percentagem + "%" : "-"}</td>
+        <td><strong>${formatCurrency(c.valor_comissao)}</strong></td>
+      </tr>`,
+    )
+    .join("")
+
+  return `
+    <div style="padding:0.75rem 1rem;">
+      <table class="table" style="margin:0; font-size:0.9rem;">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Contrato</th>
+            <th>Valor Líquido NF</th>
+            <th>%</th>
+            <th>Comissão</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="text-align:right; font-weight:bold;">Total:</td>
+            <td><strong>${formatCurrency(detalhe.total_comissao)}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`
 }
 
 /**

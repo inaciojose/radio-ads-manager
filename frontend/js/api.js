@@ -637,6 +637,18 @@ class API {
       body: JSON.stringify(data),
     })
   }
+
+  // ============================================
+  // Comissões
+  // ============================================
+
+  async getComissoes(mes) {
+    return this.request(`/comissoes/?mes=${encodeURIComponent(mes)}`)
+  }
+
+  async getComissaoDetalhe(responsavelId, mes) {
+    return this.request(`/comissoes/${responsavelId}?mes=${encodeURIComponent(mes)}`)
+  }
 }
 
 // Instância global da API
