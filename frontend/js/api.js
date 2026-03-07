@@ -610,6 +610,29 @@ class API {
       body: JSON.stringify(data),
     })
   }
+
+  // ============================================
+  // Responsáveis
+  // ============================================
+
+  async getResponsaveis(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/responsaveis/${query ? "?" + query : ""}`)
+  }
+
+  async createResponsavel(data) {
+    return this.request("/responsaveis/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateResponsavel(id, data) {
+    return this.request(`/responsaveis/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  }
 }
 
 // Instância global da API

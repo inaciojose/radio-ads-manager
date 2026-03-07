@@ -86,6 +86,16 @@
           <span>Programas</span>
         </a>
         <a
+          href="#responsaveis"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('responsaveis', event)"
+        >
+          <i class="fas fa-user-tie"></i>
+          <span>Responsáveis</span>
+        </a>
+        <a
           href="#usuarios"
           class="nav-item"
           data-auth-only="true"
@@ -599,6 +609,55 @@
           </div>
         </div>
 
+        <!-- Responsáveis Page -->
+        <div id="page-responsaveis" class="page">
+          <div class="page-header">
+            <button
+              class="btn btn-primary"
+              data-requires-write="true"
+              onclick="showResponsavelModal()"
+            >
+              <i class="fas fa-plus"></i> Novo Responsável
+            </button>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-responsaveis"
+                placeholder="Buscar responsáveis..."
+                oninput="searchResponsaveis()"
+              />
+            </div>
+            <div class="filters">
+              <select id="filter-responsavel-status" onchange="loadResponsaveis()">
+                <option value="">Todos</option>
+                <option value="ativo" selected>Ativos</option>
+                <option value="inativo">Inativos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-responsaveis">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="4" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Notas Fiscais Page -->
         <div id="page-notas-fiscais" class="page">
           <div class="page-header">
@@ -776,6 +835,51 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="savePrograma()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Responsável Modal -->
+    <div id="modal-responsavel" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="responsavel-modal-title">Novo Responsável</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-responsavel">
+            <input type="hidden" id="responsavel-id" />
+
+            <div class="form-group">
+              <label>Nome *</label>
+              <input type="text" id="responsavel-nome" />
+            </div>
+
+            <div class="form-group">
+              <label>Telefone</label>
+              <input
+                type="text"
+                id="responsavel-telefone"
+                inputmode="numeric"
+                oninput="this.value = maskTelefone(this.value)"
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+
+            <div class="form-group" id="responsavel-status-group" style="display: none">
+              <label>Status</label>
+              <select id="responsavel-status">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveResponsavel()">Salvar</button>
         </div>
       </div>
     </div>
@@ -1364,6 +1468,7 @@
     <script src="js/arquivos.js"></script>
     <script src="js/usuarios.js"></script>
     <script src="js/programas.js"></script>
+    <script src="js/responsaveis.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

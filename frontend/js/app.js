@@ -286,6 +286,7 @@ function showPage(pageName, evt) {
     veiculacoes: "Veiculações",
     arquivos: "Arquivos",
     programas: "Programas",
+    responsaveis: "Responsáveis",
     usuarios: "Usuários",
   }
   document.getElementById("page-title").textContent = titles[pageName]
@@ -326,6 +327,8 @@ async function loadPageData(pageName) {
       return loadArquivos()
     case "programas":
       return loadProgramas()
+    case "responsaveis":
+      return loadResponsaveis()
     case "usuarios":
       if (canManageUsers()) {
         return loadUsuarios()

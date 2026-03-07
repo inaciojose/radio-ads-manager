@@ -130,6 +130,10 @@ const getStatusBadge = (status, type = "cliente") => {
       ativo: '<span class="badge badge-success">Ativo</span>',
       inativo: '<span class="badge badge-secondary">Inativo</span>',
     },
+    responsavel: {
+      ativo: '<span class="badge badge-success">Ativo</span>',
+      inativo: '<span class="badge badge-secondary">Inativo</span>',
+    },
   }
 
   return badges[type]?.[status] || status
