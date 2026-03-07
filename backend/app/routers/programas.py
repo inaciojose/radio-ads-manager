@@ -92,3 +92,17 @@ def atualizar_programa(
     db.commit()
     db.refresh(db_programa)
     return db_programa
+
+
+@router.delete("/{programa_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_programa(
+    programa_id: int,
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    db_programa = db.query(models.Programa).filter(models.Programa.id == programa_id).first()
+    if not db_programa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Programa não encontrado")
+
+    db.delete(db_programa)
+    db.commit()

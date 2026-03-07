@@ -87,6 +87,14 @@ def criar_contrato_com_itens(
             )
             db.add(db_meta)
 
+        for comp in contrato.comissionamentos:
+            db.add(models.Comissionamento(
+                contrato_id=db_contrato.id,
+                responsavel_id=comp.responsavel_id,
+                percentagem=comp.percentagem,
+                is_principal=comp.is_principal,
+            ))
+
         try:
             db.commit()
             db.refresh(db_contrato)

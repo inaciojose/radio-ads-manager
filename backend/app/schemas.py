@@ -297,6 +297,16 @@ class NotaFiscalListResponse(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Comissionamento (Create — sem dependências)
+# ============================================
+
+class ComissionamentoCreate(BaseModel):
+    responsavel_id: int
+    percentagem: Optional[float] = Field(None, ge=0, le=100)
+    is_principal: bool = False
+
+
+# ============================================
 # SCHEMAS: Contrato
 # ============================================
 
@@ -356,6 +366,7 @@ class ContratoCreate(ContratoBase):
     """Schema para criar contrato com seus itens"""
     itens: List[ContratoItemCreate] = Field(..., min_length=1, description="Itens do contrato")
     arquivos_metas: List[ContratoArquivoMetaCreate] = Field(default_factory=list)
+    comissionamentos: List[ComissionamentoCreate] = Field(default_factory=list)
 
 
 class ContratoUpdate(BaseModel):
@@ -389,6 +400,8 @@ class ContratoUpdate(BaseModel):
             raise ValueError('nf_dinamica deve ser "unica" ou "mensal"')
         return v
 
+    comissionamentos: Optional[List[ComissionamentoCreate]] = None
+
 
 class ContratoResponse(ContratoBase):
     """Schema para retornar contrato"""
@@ -399,7 +412,8 @@ class ContratoResponse(ContratoBase):
     itens: List[ContratoItemResponse] = []
     arquivos_metas: List[ContratoArquivoMetaResponse] = []
     notas_fiscais: List[NotaFiscalResponse] = []
-    
+    comissionamentos: List["ComissionamentoResponse"] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -576,6 +590,19 @@ class ResponsavelResponse(ResponsavelBase):
     codigo: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# SCHEMAS: Comissionamento (Response — referencia ResponsavelResponse)
+# ============================================
+
+class ComissionamentoResponse(BaseModel):
+    id: int
+    responsavel_id: int
+    percentagem: Optional[float] = None
+    is_principal: bool
+    responsavel: Optional[ResponsavelResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -808,3 +835,7 @@ class PaginatedResponse(BaseModel):
     page: int
     per_page: int
     total_pages: int
+
+
+# Resolve forward references que envolvem ComissionamentoResponse
+ContratoResponse.model_rebuild()

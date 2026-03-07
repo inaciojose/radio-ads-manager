@@ -867,6 +867,8 @@ def atualizar_contrato(
         )
 
     update_data = contrato_update.model_dump(exclude_unset=True)
+    comissionamentos_data = update_data.pop("comissionamentos", None)
+
     for field, value in update_data.items():
         setattr(db_contrato, field, value)
 
@@ -877,6 +879,18 @@ def atualizar_contrato(
     ).first() is not None
     if tem_notas:
         _sincronizar_resumo_nf_contrato(db, db_contrato)
+
+    if comissionamentos_data is not None:
+        db.query(models.Comissionamento).filter(
+            models.Comissionamento.contrato_id == contrato_id
+        ).delete(synchronize_session="fetch")
+        for c in comissionamentos_data:
+            db.add(models.Comissionamento(
+                contrato_id=contrato_id,
+                responsavel_id=c["responsavel_id"],
+                percentagem=c.get("percentagem"),
+                is_principal=c.get("is_principal", False),
+            ))
 
     db.commit()
     db.refresh(db_contrato)

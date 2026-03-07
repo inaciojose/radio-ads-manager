@@ -139,6 +139,9 @@ class Contrato(Base):
         back_populates="contrato",
         cascade="all, delete-orphan",
     )
+    comissionamentos = relationship(
+        "Comissionamento", back_populates="contrato", cascade="all, delete-orphan"
+    )
     
     def __repr__(self):
         return f"<Contrato(id={self.id}, numero='{self.numero_contrato}')>"
@@ -377,6 +380,31 @@ class Responsavel(Base):
 
     def __repr__(self):
         return f"<Responsavel(id={self.id}, nome='{self.nome}')>"
+
+
+# ============================================
+# MODELO: Comissionamento
+# ============================================
+
+class Comissionamento(Base):
+    """
+    Registro de comissionamento vinculado a um contrato.
+    Um comissionamento com is_principal=True é o responsável principal do contrato.
+    """
+    __tablename__ = "comissionamentos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contrato_id = Column(Integer, ForeignKey("contratos.id"), nullable=False)
+    responsavel_id = Column(Integer, ForeignKey("responsaveis.id"), nullable=False)
+    percentagem = Column(Float, nullable=True)          # None = não definida
+    is_principal = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    contrato = relationship("Contrato", back_populates="comissionamentos")
+    responsavel = relationship("Responsavel")
+
+    def __repr__(self):
+        return f"<Comissionamento(id={self.id}, contrato_id={self.contrato_id}, responsavel_id={self.responsavel_id})>"
 
 
 # ============================================
