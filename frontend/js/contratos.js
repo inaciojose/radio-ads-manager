@@ -20,6 +20,102 @@ function _populateProgramaSelect(selectId, selected = "") {
   el.innerHTML = `<option value="">Selecione um programa...</option>${getProgramaSelectOptions(selected)}`
 }
 
+// ============================================
+// Comissionamento
+// ============================================
+
+const REGRAS_COMISSAO = [
+  { programaNome: "Forró do Lima", codigo: "lima_jr",      percentagem: null },
+  { programaNome: "Jornal Seara",  codigo: "luis_augusto", percentagem: 5 },
+]
+
+function _populateResponsavelSelect(selectId, selectedId = "") {
+  const el = document.getElementById(selectId)
+  if (!el) return
+  el.innerHTML = `<option value="">Sem responsável principal</option>${getResponsavelSelectOptions(selectedId)}`
+}
+
+function addComissionadoRow(responsavelId = null, percentagem = null) {
+  const container = document.getElementById("contrato-comissionados-list")
+  if (!container) return
+  const row = document.createElement("div")
+  row.className = "comissionado-row"
+  row.style.cssText = "display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;"
+  row.innerHTML = `
+    <select class="comp-responsavel" style="flex:1">
+      <option value="">Selecione...</option>
+      ${getResponsavelSelectOptions(responsavelId ?? "")}
+    </select>
+    <input type="number" class="comp-percentagem" placeholder="%"
+           min="0" max="100" step="0.01" style="width:80px"
+           value="${percentagem ?? ""}">
+    <button type="button" class="btn btn-sm btn-danger"
+            onclick="removeComissionadoRow(this)">×</button>
+  `
+  container.appendChild(row)
+}
+
+function removeComissionadoRow(btn) {
+  btn?.closest(".comissionado-row")?.remove()
+}
+
+function renderComissionados(comissionamentos) {
+  const container = document.getElementById("contrato-comissionados-list")
+  if (!container) return
+  container.innerHTML = ""
+  const extras = (comissionamentos || []).filter((c) => !c.is_principal)
+  for (const c of extras) {
+    addComissionadoRow(c.responsavel_id, c.percentagem)
+  }
+}
+
+function applyAutoComissaoRules(programaNome) {
+  if (!programaNome) return
+  const principalId = Number(document.getElementById("contrato-responsavel-principal")?.value) || null
+  for (const regra of REGRAS_COMISSAO) {
+    if (programaNome !== regra.programaNome) continue
+    const responsavel = responsaveisCache.find((r) => r.codigo === regra.codigo)
+    if (!responsavel) continue
+    if (responsavel.id === principalId) continue
+    const jaAdicionado = Array.from(
+      document.querySelectorAll("#contrato-comissionados-list .comp-responsavel"),
+    ).some((sel) => Number(sel.value) === responsavel.id)
+    if (!jaAdicionado) {
+      addComissionadoRow(responsavel.id, regra.percentagem)
+    }
+  }
+}
+
+function onContratoTipoProgramaChange(valor) {
+  applyAutoComissaoRules(valor)
+}
+
+function collectComissionamentos() {
+  const result = []
+  const principalId = Number(document.getElementById("contrato-responsavel-principal")?.value) || null
+  if (principalId) {
+    const percPrincipal = document.getElementById("contrato-responsavel-principal-percentagem")?.value
+    result.push({
+      responsavel_id: principalId,
+      percentagem: percPrincipal !== "" && percPrincipal !== null && percPrincipal !== undefined
+        ? Number(percPrincipal) : null,
+      is_principal: true,
+    })
+  }
+  for (const row of document.querySelectorAll("#contrato-comissionados-list .comissionado-row")) {
+    const respId = Number(row.querySelector(".comp-responsavel")?.value) || null
+    const percVal = row.querySelector(".comp-percentagem")?.value
+    if (respId) {
+      result.push({
+        responsavel_id: respId,
+        percentagem: percVal !== "" && percVal !== null ? Number(percVal) : null,
+        is_principal: false,
+      })
+    }
+  }
+  return result
+}
+
 const contratoModalState = {
   arquivosCliente: [],
 }
@@ -279,7 +375,7 @@ function renderContratoItensEdit(itens) {
         <div class="form-row">
           <div class="form-group">
             <label>Tipo de Programa</label>
-            <select class="contrato-item-tipo">
+            <select class="contrato-item-tipo" onchange="applyAutoComissaoRules(this.value)">
               <option value="">Selecione um programa...</option>
               ${getProgramaSelectOptions(item.tipo_programa || "")}
             </select>
@@ -513,6 +609,7 @@ function toggleContratoMetaDelete(btn) {
 async function showContratoModal(contratoId = null) {
   if (!requireWriteAccess()) return
   await ensureProgramasLoaded()
+  await ensureResponsaveisLoaded()
   _populateProgramaSelect("contrato-item-tipo")
   const modalTitle = document.getElementById("contrato-modal-title")
   const createItemSection = document.getElementById("contrato-item-create-section")
@@ -585,6 +682,13 @@ async function showContratoModal(contratoId = null) {
   document.getElementById("contrato-data-emissao-nf").value =
     contrato?.data_emissao_nf || ""
   document.getElementById("contrato-observacoes").value = contrato?.observacoes || ""
+
+  // Comissionamento
+  const principal = contrato?.comissionamentos?.find((c) => c.is_principal)
+  _populateResponsavelSelect("contrato-responsavel-principal", principal?.responsavel_id ?? "")
+  const percPrincipalEl = document.getElementById("contrato-responsavel-principal-percentagem")
+  if (percPrincipalEl) percPrincipalEl.value = principal?.percentagem ?? ""
+  renderComissionados(contrato?.comissionamentos || [])
 
   document.getElementById("contrato-item-tipo").value = ""
   document.getElementById("contrato-item-quantidade").value = ""
@@ -672,7 +776,7 @@ async function saveContrato() {
         })
       }
 
-      await api.updateContrato(id, basePayload)
+      await api.updateContrato(id, { ...basePayload, comissionamentos: collectComissionamentos() })
 
       for (const item of itensPayload) {
         await api.updateContratoItem(id, item.itemId, {
@@ -803,6 +907,7 @@ async function saveContrato() {
             }
           })
           .filter(Boolean),
+        comissionamentos: collectComissionamentos(),
       })
       showToast("Contrato criado", "success")
     }

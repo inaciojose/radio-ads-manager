@@ -975,7 +975,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label>Tipo de Programa *</label>
-                  <select id="contrato-item-tipo">
+                  <select id="contrato-item-tipo" onchange="onContratoTipoProgramaChange(this.value)">
                     <option value="">Selecione um programa...</option>
                   </select>
                 </div>
@@ -1017,6 +1017,32 @@
                 </button>
               </div>
               <div id="contrato-metas-edit-list"></div>
+            </div>
+
+            <!-- Comissionamento -->
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color, #e2e8f0);">
+              <h4 style="margin-bottom: 0.75rem;">Comissionamento</h4>
+
+              <div class="form-group">
+                <label>Responsável Principal</label>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <select id="contrato-responsavel-principal" style="flex:1">
+                    <option value="">Sem responsável principal</option>
+                  </select>
+                  <input type="number" id="contrato-responsavel-principal-percentagem"
+                         placeholder="%" min="0" max="100" step="0.01" style="width:80px">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                  <label style="margin:0">Comissionados Adicionais</label>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="addComissionadoRow()">
+                    <i class="fas fa-plus"></i> Adicionar
+                  </button>
+                </div>
+                <div id="contrato-comissionados-list"></div>
+              </div>
             </div>
 
             <div class="form-group">

@@ -54,7 +54,8 @@ function renderProgramas(items) {
              p.status === "ativo"
                ? `<button class="btn btn-sm btn-warning" onclick="toggleStatusPrograma(${p.id}, 'inativo')">Inativar</button>`
                : `<button class="btn btn-sm btn-success" onclick="toggleStatusPrograma(${p.id}, 'ativo')">Ativar</button>`
-           }`
+           }
+           <button class="btn btn-sm btn-danger" onclick="excluirPrograma(${p.id})">Excluir</button>`
         : '<span class="badge badge-secondary">Somente leitura</span>'
 
       return `
@@ -173,6 +174,23 @@ async function toggleStatusPrograma(id, novoStatus) {
     await loadProgramas()
   } catch (error) {
     showToast(error.message || "Erro ao alterar status", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
+async function excluirPrograma(id) {
+  if (!requireWriteAccess()) return
+  if (!confirmAction("Deseja excluir este programa? Esta ação não pode ser desfeita.")) return
+
+  try {
+    showLoading()
+    await api.deletePrograma(id)
+    programasCache = programasCache.filter((p) => p.id !== id)
+    showToast("Programa excluído", "success")
+    renderProgramas(programasCache)
+  } catch (error) {
+    showToast(error.message || "Erro ao excluir programa", "error")
   } finally {
     hideLoading()
   }

@@ -611,6 +611,10 @@ class API {
     })
   }
 
+  async deletePrograma(id) {
+    return this.request(`/programas/${id}`, { method: "DELETE" })
+  }
+
   // ============================================
   // Responsáveis
   // ============================================
