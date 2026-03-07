@@ -9,6 +9,8 @@ Diferença entre Model (models.py) e Schema:
 - Schema: Representa dados na API (entrada/saída) (Pydantic)
 """
 
+import json
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date
@@ -533,6 +535,95 @@ class NaoContabilizadaItem(BaseModel):
     motivo: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# SCHEMAS: Programa
+# ============================================
+
+_DIAS_VALIDOS = {"seg", "ter", "qua", "qui", "sex", "sab", "dom"}
+
+
+class ProgramaBase(BaseModel):
+    nome: str = Field(..., min_length=2, max_length=200)
+    dias_semana: List[str]
+    horario_inicio: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    horario_fim: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    status: str = Field(default="ativo")
+
+    @field_validator("status")
+    @classmethod
+    def validar_status(cls, v: str) -> str:
+        if v not in ("ativo", "inativo"):
+            raise ValueError('Status deve ser "ativo" ou "inativo"')
+        return v
+
+    @field_validator("dias_semana")
+    @classmethod
+    def validar_dias(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("Selecione pelo menos um dia da semana")
+        for d in v:
+            if d not in _DIAS_VALIDOS:
+                raise ValueError(f"Dia inválido: {d}")
+        return v
+
+
+class ProgramaCreate(ProgramaBase):
+    pass
+
+
+class ProgramaUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=2, max_length=200)
+    dias_semana: Optional[List[str]] = None
+    horario_inicio: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
+    horario_fim: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
+    status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validar_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("ativo", "inativo"):
+            raise ValueError('Status deve ser "ativo" ou "inativo"')
+        return v
+
+    @field_validator("dias_semana")
+    @classmethod
+    def validar_dias(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is not None:
+            if not v:
+                raise ValueError("Selecione pelo menos um dia da semana")
+            for d in v:
+                if d not in _DIAS_VALIDOS:
+                    raise ValueError(f"Dia inválido: {d}")
+        return v
+
+
+class ProgramaResponse(BaseModel):
+    id: int
+    nome: str
+    dias_semana: List[str]
+    horario_inicio: str
+    horario_fim: str
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_dias_semana(cls, values):
+        dias = getattr(values, "dias_semana", None) if hasattr(values, "dias_semana") else values.get("dias_semana")
+        if isinstance(dias, str):
+            try:
+                parsed = json.loads(dias)
+            except Exception:
+                parsed = []
+            if hasattr(values, "dias_semana"):
+                object.__setattr__(values, "dias_semana", parsed)
+            else:
+                values["dias_semana"] = parsed
+        return values
 
 
 # ============================================

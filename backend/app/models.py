@@ -334,6 +334,29 @@ class Veiculacao(Base):
 
 
 # ============================================
+# MODELO: Programa
+# ============================================
+
+class Programa(Base):
+    """
+    Representa um programa de rádio.
+    """
+    __tablename__ = "programas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(200), nullable=False, unique=True, index=True)
+    dias_semana = Column(Text, nullable=False)   # JSON array: ["seg","ter","qua"]
+    horario_inicio = Column(String(5), nullable=False)  # "HH:MM"
+    horario_fim = Column(String(5), nullable=False)     # "HH:MM"
+    status = Column(String(20), default="ativo")        # ativo|inativo
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Programa(id={self.id}, nome='{self.nome}')>"
+
+
+# ============================================
 # MÉTODOS ÚTEIS
 # ============================================
 
