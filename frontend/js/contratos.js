@@ -14,6 +14,12 @@ const contratosState = {
   searchTimer: null,
 }
 
+function _populateProgramaSelect(selectId, selected = "") {
+  const el = document.getElementById(selectId)
+  if (!el) return
+  el.innerHTML = `<option value="">Selecione um programa...</option>${getProgramaSelectOptions(selected)}`
+}
+
 const contratoModalState = {
   arquivosCliente: [],
 }
@@ -273,7 +279,10 @@ function renderContratoItensEdit(itens) {
         <div class="form-row">
           <div class="form-group">
             <label>Tipo de Programa</label>
-            <input type="text" class="contrato-item-tipo" value="${escapeHtml(item.tipo_programa || "")}" />
+            <select class="contrato-item-tipo">
+              <option value="">Selecione um programa...</option>
+              ${getProgramaSelectOptions(item.tipo_programa || "")}
+            </select>
           </div>
           <div class="form-group">
             <label>Qtd Contratada</label>
@@ -503,6 +512,8 @@ function toggleContratoMetaDelete(btn) {
 
 async function showContratoModal(contratoId = null) {
   if (!requireWriteAccess()) return
+  await ensureProgramasLoaded()
+  _populateProgramaSelect("contrato-item-tipo")
   const modalTitle = document.getElementById("contrato-modal-title")
   const createItemSection = document.getElementById("contrato-item-create-section")
   const editItemSection = document.getElementById("contrato-item-edit-section")

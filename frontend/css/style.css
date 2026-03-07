@@ -1138,6 +1138,32 @@ body.sidebar-collapsed #api-status-text {
 }
 
 /* ============================================
+   PROGRAMAS - CHECKBOXES DE DIAS DA SEMANA
+   ============================================ */
+
+.dias-semana-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* ============================================
    VEICULAÇÕES PAGE - LAYOUT
    ============================================ */
 

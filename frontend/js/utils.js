@@ -126,6 +126,10 @@ const getStatusBadge = (status, type = "cliente") => {
       admin: '<span class="badge badge-admin">Administrador</span>',
       operador: '<span class="badge badge-operador">Operador</span>',
     },
+    programa: {
+      ativo: '<span class="badge badge-success">Ativo</span>',
+      inativo: '<span class="badge badge-secondary">Inativo</span>',
+    },
   }
 
   return badges[type]?.[status] || status

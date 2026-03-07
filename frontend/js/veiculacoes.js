@@ -188,6 +188,11 @@ async function showLoteVeiculacaoModal() {
 
   try {
     showLoading()
+    await ensureProgramasLoaded()
+    const loteSelect = document.getElementById("lote-tipo-programa")
+    if (loteSelect) {
+      loteSelect.innerHTML = `<option value="">Selecione um programa...</option>${getProgramaSelectOptions()}`
+    }
     const arquivos = await api.getAllArquivos({ ativo: true })
     const select = document.getElementById("lote-arquivo")
     select.innerHTML = [
@@ -201,7 +206,6 @@ async function showLoteVeiculacaoModal() {
     document.getElementById("lote-data").value =
       document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
     document.getElementById("lote-frequencia").value = "102.7"
-    document.getElementById("lote-tipo-programa").value = ""
     document.getElementById("lote-horarios").value = ""
     openModal("modal-veiculacao-lote")
   } catch (error) {

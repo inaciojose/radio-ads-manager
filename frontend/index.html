@@ -76,6 +76,16 @@
           <span>Notas Fiscais</span>
         </a>
         <a
+          href="#programas"
+          class="nav-item"
+          data-auth-only="true"
+          style="display: none"
+          onclick="showPage('programas', event)"
+        >
+          <i class="fas fa-radio"></i>
+          <span>Programas</span>
+        </a>
+        <a
           href="#usuarios"
           class="nav-item"
           data-auth-only="true"
@@ -539,6 +549,56 @@
           </div>
         </div>
 
+        <!-- Programas Page -->
+        <div id="page-programas" class="page">
+          <div class="page-header">
+            <button
+              class="btn btn-primary"
+              data-requires-write="true"
+              onclick="showProgramaModal()"
+            >
+              <i class="fas fa-plus"></i> Novo Programa
+            </button>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-programas"
+                placeholder="Buscar programas..."
+                oninput="searchProgramas()"
+              />
+            </div>
+            <div class="filters">
+              <select id="filter-programa-status" onchange="loadProgramas()">
+                <option value="">Todos</option>
+                <option value="ativo" selected>Ativos</option>
+                <option value="inativo">Inativos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table" id="table-programas">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Dias</th>
+                    <th>Horário</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="5" class="text-center">Carregando...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Notas Fiscais Page -->
         <div id="page-notas-fiscais" class="page">
           <div class="page-header">
@@ -662,6 +722,64 @@
       </div>
     </div>
 
+    <!-- Programa Modal -->
+    <div id="modal-programa" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="programa-modal-title">Novo Programa</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="form-programa">
+            <input type="hidden" id="programa-id" />
+
+            <div class="form-group">
+              <label>Nome *</label>
+              <input type="text" id="programa-nome" />
+            </div>
+
+            <div class="form-group">
+              <label>Dias da semana *</label>
+              <div class="dias-semana-checkboxes">
+                <label class="checkbox-label"><input type="checkbox" id="dia-seg" value="seg" /> Segunda</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-ter" value="ter" /> Terça</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-qua" value="qua" /> Quarta</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-qui" value="qui" /> Quinta</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-sex" value="sex" /> Sexta</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-sab" value="sab" /> Sábado</label>
+                <label class="checkbox-label"><input type="checkbox" id="dia-dom" value="dom" /> Domingo</label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Horário de início *</label>
+                <input type="time" id="programa-horario-inicio" />
+              </div>
+              <div class="form-group">
+                <label>Horário de fim *</label>
+                <input type="time" id="programa-horario-fim" />
+              </div>
+            </div>
+
+            <div class="form-group" id="programa-status-group" style="display: none">
+              <label>Status</label>
+              <select id="programa-status">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="savePrograma()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Contrato Modal -->
     <div id="modal-contrato" class="modal">
       <div class="modal-content">
@@ -753,7 +871,9 @@
               <div class="form-row">
                 <div class="form-group">
                   <label>Tipo de Programa *</label>
-                  <input type="text" id="contrato-item-tipo" placeholder="musical, esporte..." />
+                  <select id="contrato-item-tipo">
+                    <option value="">Selecione um programa...</option>
+                  </select>
                 </div>
                 <div class="form-group">
                   <label>Meta Total</label>
@@ -1213,7 +1333,9 @@
             </div>
             <div class="form-group">
               <label>Tipo de Programa</label>
-              <input type="text" id="lote-tipo-programa" placeholder="esporte, jornal..." />
+              <select id="lote-tipo-programa">
+                <option value="">Selecione um programa...</option>
+              </select>
             </div>
             <div class="form-group">
               <label>Horários (um por linha) *</label>
@@ -1241,6 +1363,7 @@
     <script src="js/veiculacoes.js"></script>
     <script src="js/arquivos.js"></script>
     <script src="js/usuarios.js"></script>
+    <script src="js/programas.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

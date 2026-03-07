@@ -285,6 +285,7 @@ function showPage(pageName, evt) {
     "notas-fiscais": "Notas Fiscais",
     veiculacoes: "Veiculações",
     arquivos: "Arquivos",
+    programas: "Programas",
     usuarios: "Usuários",
   }
   document.getElementById("page-title").textContent = titles[pageName]
@@ -323,6 +324,8 @@ async function loadPageData(pageName) {
       return loadVeiculacoes()
     case "arquivos":
       return loadArquivos()
+    case "programas":
+      return loadProgramas()
     case "usuarios":
       if (canManageUsers()) {
         return loadUsuarios()

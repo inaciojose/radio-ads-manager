@@ -587,6 +587,29 @@ class API {
   async getArquivosNaoUtilizados(dias = 30) {
     return this.request(`/arquivos/relatorios/nao-utilizados?dias=${dias}`)
   }
+
+  // ============================================
+  // Programas
+  // ============================================
+
+  async getProgramas(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/programas/${query ? "?" + query : ""}`)
+  }
+
+  async createPrograma(data) {
+    return this.request("/programas/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updatePrograma(id, data) {
+    return this.request(`/programas/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  }
 }
 
 // Instância global da API
