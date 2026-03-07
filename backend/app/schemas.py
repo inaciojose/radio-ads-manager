@@ -696,6 +696,33 @@ class ProgramaResponse(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Comissões
+# ============================================
+
+class ComissaoDetalheItem(BaseModel):
+    contrato_id: int
+    numero_contrato: Optional[str] = None
+    cliente_nome: str
+    valor_liquido: Optional[float] = None
+    percentagem: Optional[float] = None
+    valor_comissao: Optional[float] = None
+
+
+class ComissaoResumoItem(BaseModel):
+    responsavel_id: int
+    responsavel_nome: str
+    total_comissao: float
+
+
+class ComissaoDetalheResponse(BaseModel):
+    responsavel_id: int
+    responsavel_nome: str
+    mes: str
+    total_comissao: float
+    contratos: List[ComissaoDetalheItem]
+
+
+# ============================================
 # SCHEMAS: Relatórios e Estatísticas
 # ============================================
 

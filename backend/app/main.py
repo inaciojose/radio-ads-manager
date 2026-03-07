@@ -16,7 +16,7 @@ from typing import Any
 
 from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings
-from app.routers import arquivos, auth, clientes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
+from app.routers import arquivos, auth, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 
 
@@ -339,6 +339,9 @@ app.include_router(programas.router)
 
 # Registrar router de responsáveis
 app.include_router(responsaveis.router)
+
+# Registrar router de comissões
+app.include_router(comissoes.router)
 
 # Registrar router de arquivos
 app.include_router(arquivos.router)
