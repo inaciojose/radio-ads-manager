@@ -357,6 +357,29 @@ class Programa(Base):
 
 
 # ============================================
+# MODELO: Responsavel
+# ============================================
+
+class Responsavel(Base):
+    """
+    Pessoa física que recebe comissão sobre contratos.
+    Independente dos usuários do sistema (não tem login).
+    """
+    __tablename__ = "responsaveis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(200), nullable=False)
+    telefone = Column(String(20), nullable=True)
+    status = Column(String(20), default="ativo")       # ativo|inativo
+    codigo = Column(String(50), unique=True, nullable=True)  # slug especial; null p/ comuns
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Responsavel(id={self.id}, nome='{self.nome}')>"
+
+
+# ============================================
 # MÉTODOS ÚTEIS
 # ============================================
 

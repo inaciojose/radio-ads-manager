@@ -538,6 +538,48 @@ class NaoContabilizadaItem(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Responsavel
+# ============================================
+
+class ResponsavelBase(BaseModel):
+    nome: str = Field(..., min_length=2, max_length=200)
+    telefone: Optional[str] = Field(None, max_length=20)
+    status: str = Field(default="ativo")
+
+    @field_validator("status")
+    @classmethod
+    def validar_status(cls, v: str) -> str:
+        if v not in ("ativo", "inativo"):
+            raise ValueError('Status deve ser "ativo" ou "inativo"')
+        return v
+
+
+class ResponsavelCreate(ResponsavelBase):
+    pass
+
+
+class ResponsavelUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=2, max_length=200)
+    telefone: Optional[str] = Field(None, max_length=20)
+    status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validar_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("ativo", "inativo"):
+            raise ValueError('Status deve ser "ativo" ou "inativo"')
+        return v
+
+
+class ResponsavelResponse(ResponsavelBase):
+    id: int
+    codigo: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
 # SCHEMAS: Programa
 # ============================================
 
