@@ -48,11 +48,14 @@ def listar_notas_fiscais(
     competencia: Optional[str] = Query(None, description="Filtro YYYY-MM"),
     status_nf: Optional[str] = Query(None, pattern="^(pendente|emitida|paga|cancelada)$"),
     cliente_id: Optional[int] = Query(None, ge=1),
+    busca: Optional[str] = Query(None, description="Busca por número da NF ou número do recibo"),
     sort_by: Optional[str] = Query(None),
     sort_dir: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
+    from sqlalchemy import or_
+
     query = (
         db.query(models.NotaFiscal, models.Contrato, models.Cliente)
         .join(models.Contrato, models.NotaFiscal.contrato_id == models.Contrato.id)
@@ -68,6 +71,15 @@ def listar_notas_fiscais(
 
     if cliente_id:
         query = query.filter(models.Contrato.cliente_id == cliente_id)
+
+    if busca:
+        termo = f"%{busca.strip()}%"
+        query = query.filter(
+            or_(
+                models.NotaFiscal.numero.ilike(termo),
+                models.NotaFiscal.numero_recibo.ilike(termo),
+            )
+        )
 
     total = query.count()
 

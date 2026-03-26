@@ -42,6 +42,7 @@ function _buildNotasFiscaisParams() {
   const statusNf = document.getElementById("filter-nf-status")?.value || ""
   const clienteId = document.getElementById("filter-nf-cliente")?.value || ""
   const competenciaRaw = document.getElementById("filter-nf-competencia")?.value || ""
+  const busca = document.getElementById("search-notas-fiscais")?.value?.trim() || ""
 
   return {
     skip: notasFiscaisState.skip,
@@ -49,6 +50,7 @@ function _buildNotasFiscaisParams() {
     ...(statusNf ? { status_nf: statusNf } : {}),
     ...(clienteId ? { cliente_id: clienteId } : {}),
     ...(competenciaRaw ? { competencia: competenciaRaw } : {}),
+    ...(busca ? { busca } : {}),
     ...(notasFiscaisState.sortBy
       ? { sort_by: notasFiscaisState.sortBy, sort_dir: notasFiscaisState.sortDir }
       : {}),

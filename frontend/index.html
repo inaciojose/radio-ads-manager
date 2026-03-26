@@ -683,6 +683,15 @@
         <!-- Notas Fiscais Page -->
         <div id="page-notas-fiscais" class="page">
           <div class="page-header">
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="search-notas-fiscais"
+                placeholder="Buscar por nº NF ou nº recibo..."
+                oninput="loadNotasFiscais()"
+              />
+            </div>
             <div class="filters">
               <input type="month" id="filter-nf-competencia" onchange="loadNotasFiscais()" />
               <select id="filter-nf-status" onchange="loadNotasFiscais()">
