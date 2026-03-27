@@ -273,6 +273,9 @@
               <option value="ativo">Ativos</option>
               <option value="inativo">Inativos</option>
             </select>
+            <button class="btn btn-secondary" onclick="abrirRelatorioClientes()">
+              <i class="fas fa-print"></i> Imprimir Relatório
+            </button>
           </div>
 
           <div class="card">
@@ -332,6 +335,9 @@
                 <option value="102.7">102.7</option>
                 <option value="104.7">104.7</option>
               </select>
+              <button class="btn btn-secondary" onclick="abrirRelatorioContratos()">
+                <i class="fas fa-print"></i> Imprimir Relatório
+              </button>
             </div>
           </div>
 
@@ -406,6 +412,9 @@
                   <button class="freq-tab" onclick="setFreqTab('102.7', this)">102.7</button>
                   <button class="freq-tab" onclick="setFreqTab('104.7', this)">104.7</button>
                 </div>
+                <button class="btn btn-secondary" onclick="abrirRelatorioVeiculacoes()">
+                  <i class="fas fa-print"></i> Imprimir Relatório
+                </button>
               </div>
               <div class="table-responsive">
                 <table class="table" id="table-veiculacoes">
@@ -661,7 +670,14 @@
           <div class="card" style="margin-top: 1.5rem;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding: 1rem 1rem 0.5rem;">
               <h3 style="margin:0; font-size:1.1rem;">Comissões do Mês</h3>
-              <input type="month" id="filter-comissoes-mes" onchange="loadComissoes()" style="padding:0.3rem 0.5rem;" />
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <select id="filter-comissoes-mes" class="month-picker" onchange="loadComissoes()" style="padding:0.3rem 0.5rem;">
+                  <option value=""></option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="abrirRelatorioComissoes()">
+                  <i class="fas fa-print"></i> Imprimir Relatório
+                </button>
+              </div>
             </div>
             <div class="table-responsive">
               <table class="table" id="table-comissoes">
@@ -693,7 +709,9 @@
               />
             </div>
             <div class="filters">
-              <input type="month" id="filter-nf-competencia" onchange="loadNotasFiscais()" />
+              <select id="filter-nf-competencia" class="month-picker" onchange="loadNotasFiscais()">
+                <option value="">Todas as competências</option>
+              </select>
               <select id="filter-nf-status" onchange="loadNotasFiscais()">
                 <option value="">Todos os Status</option>
                 <option value="pendente">Pendente</option>
@@ -704,6 +722,9 @@
               <select id="filter-nf-cliente" onchange="loadNotasFiscais()">
                 <option value="">Todos os Clientes</option>
               </select>
+              <button class="btn btn-secondary" onclick="abrirRelatorioNotasFiscais()">
+                <i class="fas fa-print"></i> Imprimir Relatório
+              </button>
             </div>
           </div>
           <div class="card">
@@ -1113,7 +1134,9 @@
             </div>
             <div class="form-group">
               <label>Competência (mês de referência)</label>
-              <input type="month" id="nf-competencia" />
+              <select id="nf-competencia" class="month-picker">
+                <option value="">— Selecione —</option>
+              </select>
             </div>
             <div class="form-group">
               <label>Número do Recibo *</label>
@@ -1201,7 +1224,9 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Competência</label>
-                <input type="month" id="faturamento-competencia" />
+                <select id="faturamento-competencia" class="month-picker">
+                  <option value="">— Selecione —</option>
+                </select>
               </div>
               <div class="form-group">
                 <label>Status</label>
@@ -1275,7 +1300,9 @@
           <!-- Aba: Histórico -->
           <div class="nf-tab-panel" id="faturamento-tab-historico">
             <div class="faturamento-historico-filtros">
-              <input type="month" id="historico-filtro-competencia" title="Filtrar por competência" />
+              <select id="historico-filtro-competencia" class="month-picker" title="Filtrar por competência">
+                <option value="">Todas as competências</option>
+              </select>
               <select id="faturamento-filtro-status">
                 <option value="">Todos os status</option>
                 <option value="pendente">Pendente</option>
@@ -1507,6 +1534,40 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="saveLoteVeiculacoes()">Salvar Lote</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Imprimir Relatório (reutilizável) -->
+    <div id="modal-relatorio" class="modal">
+      <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3 id="relatorio-modal-title">Imprimir Relatório</h3>
+          <button class="btn-close" onclick="closeModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="relatorio-preview-text" style="color: #555; margin-bottom: 1.2rem;"></p>
+          <div class="form-group">
+            <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Formato</label>
+            <div style="display: flex; gap: 1.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.95rem;">
+                <input type="radio" name="relatorio-formato" value="pdf" checked />
+                <i class="fas fa-file-pdf" style="color: #c0392b;"></i> PDF
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.95rem;">
+                <input type="radio" name="relatorio-formato" value="excel" />
+                <i class="fas fa-file-excel" style="color: #27ae60;"></i> Excel
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="_relatorioExportarAtual()">
+            <i class="fas fa-download"></i> Exportar
+          </button>
         </div>
       </div>
     </div>

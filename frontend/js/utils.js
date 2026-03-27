@@ -213,6 +213,71 @@ const maskCnpjCpf = (value) => {
     .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, "$1.$2.$3/$4-$5")
 }
 
+// ── Modal de Relatório (reutilizável) ────────────────────────────────────────
+
+let _relatorioExportarCallback = null
+
+/**
+ * Abre o modal de impressão de relatório.
+ * @param {string} titulo - Título exibido no modal.
+ * @param {number|null} totalRegistros - Contagem de registros com filtros atuais.
+ * @param {function} onExportar - Chamada com o formato escolhido ('pdf' | 'excel').
+ */
+const openRelatorioModal = (titulo, totalRegistros, onExportar) => {
+  document.getElementById("relatorio-modal-title").textContent = `Imprimir Relatório de ${titulo}`
+  const previewEl = document.getElementById("relatorio-preview-text")
+  if (typeof totalRegistros === "number") {
+    previewEl.textContent = `${totalRegistros.toLocaleString("pt-BR")} registro${totalRegistros !== 1 ? "s" : ""} serão incluídos com os filtros atuais.`
+  } else {
+    previewEl.textContent = "O relatório incluirá todos os registros com os filtros atuais."
+  }
+  const radioEl = document.querySelector('input[name="relatorio-formato"][value="pdf"]')
+  if (radioEl) radioEl.checked = true
+  _relatorioExportarCallback = onExportar
+  openModal("modal-relatorio")
+}
+
+async function _relatorioExportarAtual() {
+  const formato = document.querySelector('input[name="relatorio-formato"]:checked')?.value || "pdf"
+  closeModal()
+  if (_relatorioExportarCallback) {
+    await _relatorioExportarCallback(formato)
+  }
+}
+
+// ── Fim Modal de Relatório ───────────────────────────────────────────────────
+
+// ── Seletores de Competência (substituto cross-browser para type="month") ────
+
+const _MONTH_NAMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+
+function initMonthSelects() {
+  const selects = document.querySelectorAll("select.month-picker")
+  if (!selects.length) return
+
+  const now = new Date()
+  const opts = []
+  for (let i = 0; i <= 72; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    opts.push(`<option value="${y}-${m}">${_MONTH_NAMES[d.getMonth()]} ${y}</option>`)
+  }
+  const optionsHtml = opts.join("")
+
+  selects.forEach((sel) => {
+    const firstOption = sel.querySelector('option[value=""]')?.outerHTML || ""
+    sel.innerHTML = firstOption + optionsHtml
+  })
+}
+
+initMonthSelects()
+
+// ── Fim Seletores de Competência ─────────────────────────────────────────────
+
 const maskTelefone = (value) => {
   const digits = value.replace(/\D/g, "").slice(0, 11)
   if (digits.length <= 10) {
