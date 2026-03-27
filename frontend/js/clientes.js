@@ -144,3 +144,27 @@ async function removerCliente(id) {
     hideLoading()
   }
 }
+
+function abrirRelatorioClientes() {
+  openRelatorioModal("Clientes", clientesCache.length, exportarClientes)
+}
+
+async function exportarClientes(formato) {
+  try {
+    showLoading()
+    const status = document.getElementById("filter-cliente-status")?.value || ""
+    const busca = (document.getElementById("search-clientes")?.value || "").trim()
+    const params = {}
+    if (status) params.status = status
+    if (busca) params.busca = busca
+    if (formato === "excel") {
+      await api.exportarClientesExcel(params)
+    } else {
+      await api.exportarClientesPdf(params)
+    }
+  } catch (error) {
+    showToast(error.message || "Erro ao exportar", "error")
+  } finally {
+    hideLoading()
+  }
+}

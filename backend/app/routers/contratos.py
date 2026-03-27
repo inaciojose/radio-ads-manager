@@ -3,9 +3,11 @@ routers/contratos.py - Endpoints para gerenciar contratos.
 """
 
 from datetime import date, datetime, timedelta
+from io import BytesIO
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -19,6 +21,7 @@ from app.services.contratos_service import (
     criar_contrato_com_itens,
 )
 from app.services.veiculacoes_service import resolver_item_contrato_para_veiculacao
+from app.services.export_service import build_excel, build_pdf, make_bar_chart, make_pie_chart
 
 
 router = APIRouter(
@@ -214,6 +217,205 @@ def _resolver_item_em_lista(itens: list, tipo_programa: Optional[str]):
     if len(itens) == 1:
         return itens[0]
     return itens[0]
+
+
+# ── Exportação ───────────────────────────────────────────────────────────────
+
+_EXPORT_HEADERS_CONTRATOS = [
+    "Cliente", "Nº Contrato", "Frequência", "Status", "Data Início",
+    "Data Fim", "Valor Total", "NF Dinâmica", "Status NF",
+]
+
+
+def _fmt_brl(value: Optional[float]) -> str:
+    if value is None:
+        return "-"
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_date(d) -> str:
+    return d.strftime("%d/%m/%Y") if d else "-"
+
+
+def _build_contratos_export_query(
+    db: Session,
+    cliente_id: Optional[int],
+    status_contrato: Optional[str],
+    status_nf: Optional[str],
+    frequencia: Optional[str],
+    busca: Optional[str],
+):
+    query = db.query(models.Contrato, models.Cliente).join(
+        models.Cliente, models.Contrato.cliente_id == models.Cliente.id
+    )
+    if cliente_id:
+        query = query.filter(models.Contrato.cliente_id == cliente_id)
+    if status_contrato:
+        query = query.filter(models.Contrato.status_contrato == status_contrato)
+    if status_nf:
+        query = query.filter(models.Contrato.status_nf == status_nf)
+    if frequencia:
+        query = query.filter(models.Contrato.frequencia == frequencia)
+    if busca:
+        pattern = f"%{busca}%"
+        query = query.filter(
+            or_(
+                models.Contrato.numero_contrato.ilike(pattern),
+                models.Cliente.nome.ilike(pattern),
+                models.Cliente.cnpj_cpf.ilike(pattern),
+            )
+        )
+    return query
+
+
+def _contrato_export_row(contrato, cliente) -> list:
+    return [
+        cliente.nome or "-",
+        contrato.numero_contrato or f"#{contrato.id}",
+        contrato.frequencia or "-",
+        contrato.status_contrato or "-",
+        _fmt_date(contrato.data_inicio),
+        _fmt_date(contrato.data_fim) if contrato.data_fim else "Indeterminado",
+        _fmt_brl(contrato.valor_total),
+        "Única" if contrato.nf_dinamica == "unica" else "Mensal",
+        contrato.status_nf or "-",
+    ]
+
+
+def _build_filtros_texto_contratos(
+    cliente_id: Optional[int],
+    status_contrato: Optional[str],
+    status_nf: Optional[str],
+    frequencia: Optional[str],
+    busca: Optional[str],
+    db: Session,
+) -> Optional[str]:
+    partes = []
+    if status_contrato:
+        partes.append(f"Status: {status_contrato.capitalize()}")
+    if status_nf:
+        partes.append(f"NF: {status_nf.capitalize()}")
+    if frequencia:
+        partes.append(f"Frequência: {frequencia}")
+    if cliente_id:
+        cli = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
+        if cli:
+            partes.append(f"Cliente: {cli.nome}")
+    if busca:
+        partes.append(f"Busca: {busca}")
+    return " | ".join(partes) if partes else None
+
+
+def _get_charts_contratos(db: Session) -> list:
+    from reportlab.platypus import Table as _Table, TableStyle as _TS
+
+    hoje = date.today()
+
+    # Pie: distribuição por status
+    status_counts: dict = {}
+    for (st,) in db.query(models.Contrato.status_contrato).all():
+        k = st or "outros"
+        status_counts[k] = status_counts.get(k, 0) + 1
+
+    # Bar: vencimentos próximos (contratos ativos)
+    ranges = [
+        ("≤ 30 dias", hoje, hoje + timedelta(days=30)),
+        ("31–60 dias", hoje + timedelta(days=31), hoje + timedelta(days=60)),
+        ("61–90 dias", hoje + timedelta(days=61), hoje + timedelta(days=90)),
+    ]
+    bar_values = [
+        float(
+            db.query(models.Contrato)
+            .filter(
+                models.Contrato.status_contrato == "ativo",
+                models.Contrato.data_fim.isnot(None),
+                models.Contrato.data_fim >= d_ini,
+                models.Contrato.data_fim <= d_fim,
+            )
+            .count()
+        )
+        for _, d_ini, d_fim in ranges
+    ]
+    bar = make_bar_chart(
+        bar_values,
+        [r[0] for r in ranges],
+        title="Contratos Ativos Vencendo (próximos 90 dias)",
+        width=400,
+        height=200,
+        label_format=lambda v: str(int(v)),
+    )
+
+    if status_counts:
+        pie = make_pie_chart(
+            [float(v) for v in status_counts.values()],
+            list(status_counts.keys()),
+            title="Distribuição por Status",
+            width=350,
+            height=200,
+        )
+        side = _Table([[pie, bar]], colWidths=[370, 420])
+        side.setStyle(_TS([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        return [side]
+
+    return [bar]
+
+
+@router.get("/exportar/excel")
+def exportar_contratos_excel(
+    cliente_id: Optional[int] = Query(None, ge=1),
+    status_contrato: Optional[str] = Query(None),
+    status_nf: Optional[str] = Query(None),
+    frequencia: Optional[str] = Query(None),
+    busca: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    rows = (
+        _build_contratos_export_query(db, cliente_id, status_contrato, status_nf, frequencia, busca)
+        .order_by(models.Contrato.created_at.desc())
+        .all()
+    )
+    data = [_contrato_export_row(c, cl) for c, cl in rows]
+    content = build_excel(_EXPORT_HEADERS_CONTRATOS, data, sheet_name="Contratos")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=contratos.xlsx"},
+    )
+
+
+@router.get("/exportar/pdf")
+def exportar_contratos_pdf(
+    cliente_id: Optional[int] = Query(None, ge=1),
+    status_contrato: Optional[str] = Query(None),
+    status_nf: Optional[str] = Query(None),
+    frequencia: Optional[str] = Query(None),
+    busca: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    rows = (
+        _build_contratos_export_query(db, cliente_id, status_contrato, status_nf, frequencia, busca)
+        .order_by(models.Contrato.created_at.desc())
+        .all()
+    )
+    data = [_contrato_export_row(c, cl) for c, cl in rows]
+    filtros_texto = _build_filtros_texto_contratos(
+        cliente_id, status_contrato, status_nf, frequencia, busca, db
+    )
+    content = build_pdf(
+        _EXPORT_HEADERS_CONTRATOS,
+        data,
+        title="Relatório de Contratos",
+        username=current_user.nome,
+        filtros_texto=filtros_texto,
+        pre_content=_get_charts_contratos(db),
+    )
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=contratos.pdf"},
+    )
 
 
 @router.get("/", response_model=List[schemas.ContratoResponse])

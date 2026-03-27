@@ -1376,3 +1376,37 @@ async function excluirFaturamentoMensal(faturamentoId) {
     hideLoading()
   }
 }
+
+
+function _buildContratosExportParams() {
+  const statusContrato = document.getElementById("filter-contrato-status")?.value || ""
+  const statusNf = document.getElementById("filter-contrato-nf")?.value || ""
+  const frequencia = document.getElementById("filter-contrato-frequencia")?.value || ""
+  const busca = (document.getElementById("search-contratos")?.value || "").trim()
+  const params = {}
+  if (statusContrato) params.status_contrato = statusContrato
+  if (statusNf) params.status_nf = statusNf
+  if (frequencia) params.frequencia = frequencia
+  if (busca) params.busca = busca
+  return params
+}
+
+function abrirRelatorioContratos() {
+  openRelatorioModal("Contratos", null, exportarContratos)
+}
+
+async function exportarContratos(formato) {
+  try {
+    showLoading()
+    const params = _buildContratosExportParams()
+    if (formato === "excel") {
+      await api.exportarContratosExcel(params)
+    } else {
+      await api.exportarContratosPdf(params)
+    }
+  } catch (error) {
+    showToast(error.message || "Erro ao exportar", "error")
+  } finally {
+    hideLoading()
+  }
+}

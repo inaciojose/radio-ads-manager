@@ -1,15 +1,18 @@
 """routers/comissoes.py - Visão de comissões por responsável."""
 
 from datetime import date
-from typing import List
+from io import BytesIO
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
+from app.services.export_service import build_excel, build_pdf, make_horizontal_bar_chart
 
 router = APIRouter(prefix="/comissoes", tags=["Comissões"])
 
@@ -98,6 +101,107 @@ def visao_geral_comissoes(
         for rid, data in sorted(totais.items(), key=lambda x: x[1]["total"], reverse=True)
         if data["total"] > 0
     ]
+
+
+_MESES_PT_COM = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+                 "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+
+_EXPORT_HEADERS_COMISSOES = ["Responsável", "Total de Comissão"]
+
+
+def _fmt_brl_com(value: Optional[float]) -> str:
+    if value is None:
+        return "-"
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _compute_comissoes(db: Session, first_of_month: date) -> list:
+    """Retorna lista de dicts {responsavel_id, nome, total} ordenada por total desc."""
+    rows = (
+        db.query(
+            models.Responsavel.id,
+            models.Responsavel.nome,
+            models.Comissionamento.percentagem,
+            models.NotaFiscal.valor_liquido,
+        )
+        .join(models.Comissionamento, models.Responsavel.id == models.Comissionamento.responsavel_id)
+        .join(models.Contrato, models.Comissionamento.contrato_id == models.Contrato.id)
+        .join(models.NotaFiscal, models.NotaFiscal.contrato_id == models.Contrato.id)
+        .filter(_nf_mes_filter(first_of_month))
+        .all()
+    )
+    totais: dict = {}
+    for resp_id, resp_nome, perc, valor in rows:
+        if perc is not None and valor is not None:
+            comissao = valor * perc / 100
+        else:
+            comissao = 0.0
+        if resp_id not in totais:
+            totais[resp_id] = {"nome": resp_nome, "total": 0.0}
+        totais[resp_id]["total"] += comissao
+    return [
+        {"responsavel_id": rid, "nome": d["nome"], "total": round(d["total"], 2)}
+        for rid, d in sorted(totais.items(), key=lambda x: x[1]["total"], reverse=True)
+        if d["total"] > 0
+    ]
+
+
+@router.get("/exportar/excel")
+def exportar_comissoes_excel(
+    mes: str = Query(..., description="Mês no formato YYYY-MM"),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    first_of_month = _parse_mes(mes)
+    items = _compute_comissoes(db, first_of_month)
+    data = [[item["nome"], _fmt_brl_com(item["total"])] for item in items]
+    content = build_excel(_EXPORT_HEADERS_COMISSOES, data, sheet_name="Comissões")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=comissoes.xlsx"},
+    )
+
+
+@router.get("/exportar/pdf")
+def exportar_comissoes_pdf(
+    mes: str = Query(..., description="Mês no formato YYYY-MM"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    first_of_month = _parse_mes(mes)
+    items = _compute_comissoes(db, first_of_month)
+    data = [[item["nome"], _fmt_brl_com(item["total"])] for item in items]
+
+    ano, m = mes.split("-")
+    mes_label = f"{_MESES_PT_COM[int(m) - 1]}/{ano}"
+    filtros_texto = f"Mês: {mes_label}"
+
+    pre_content = []
+    if items:
+        h = max(150, 30 * len(items) + 40)
+        chart = make_horizontal_bar_chart(
+            [item["total"] for item in items],
+            [item["nome"] for item in items],
+            title=f"Comissões por Responsável — {mes_label}",
+            width=750,
+            height=h,
+        )
+        pre_content.append(chart)
+
+    content = build_pdf(
+        _EXPORT_HEADERS_COMISSOES,
+        data,
+        title="Relatório de Comissões",
+        username=current_user.nome,
+        filtros_texto=filtros_texto,
+        pre_content=pre_content,
+    )
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=comissoes.pdf"},
+    )
 
 
 @router.get("/{responsavel_id}", response_model=schemas.ComissaoDetalheResponse)

@@ -649,6 +649,91 @@ class API {
   async getComissaoDetalhe(responsavelId, mes) {
     return this.request(`/comissoes/${responsavelId}?mes=${encodeURIComponent(mes)}`)
   }
+
+  // ============================================
+  // Exportação
+  // ============================================
+
+  async downloadBlob(endpoint, filename) {
+    const url = `${this.baseURL}${endpoint}`
+    const headers = this.token ? { Authorization: `Bearer ${this.token}` } : {}
+    const response = await fetch(url, { headers })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}))
+      throw new Error(this.formatErrorMessage(response.status, payload))
+    }
+    const blob = await response.blob()
+    if (typeof hideLoading === "function") hideLoading()
+    // Brave bloqueia blob: URLs iniciadas de contexto assíncrono.
+    // FileReader + data: URL funciona em todos os browsers.
+    await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const a = document.createElement("a")
+        a.href = reader.result
+        a.download = filename
+        a.style.display = "none"
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+          document.body.removeChild(a)
+          resolve()
+        }, 150)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  async exportarNotasFiscaisExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/notas-fiscais/exportar/excel${qs ? "?" + qs : ""}`, "notas_fiscais.xlsx")
+  }
+
+  async exportarNotasFiscaisPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/notas-fiscais/exportar/pdf${qs ? "?" + qs : ""}`, "notas_fiscais.pdf")
+  }
+
+  async exportarContratosExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/contratos/exportar/excel${qs ? "?" + qs : ""}`, "contratos.xlsx")
+  }
+
+  async exportarContratosPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/contratos/exportar/pdf${qs ? "?" + qs : ""}`, "contratos.pdf")
+  }
+
+  async exportarComissoesExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/comissoes/exportar/excel${qs ? "?" + qs : ""}`, "comissoes.xlsx")
+  }
+
+  async exportarComissoesPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/comissoes/exportar/pdf${qs ? "?" + qs : ""}`, "comissoes.pdf")
+  }
+
+  async exportarVeiculacoesExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/veiculacoes/exportar/excel${qs ? "?" + qs : ""}`, "veiculacoes.xlsx")
+  }
+
+  async exportarVeiculacoesPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/veiculacoes/exportar/pdf${qs ? "?" + qs : ""}`, "veiculacoes.pdf")
+  }
+
+  async exportarClientesExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/clientes/exportar/excel${qs ? "?" + qs : ""}`, "clientes.xlsx")
+  }
+
+  async exportarClientesPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/clientes/exportar/pdf${qs ? "?" + qs : ""}`, "clientes.pdf")
+  }
 }
 
 // Instância global da API

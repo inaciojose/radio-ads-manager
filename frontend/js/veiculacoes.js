@@ -264,3 +264,26 @@ async function saveLoteVeiculacoes() {
     hideLoading()
   }
 }
+
+function abrirRelatorioVeiculacoes() {
+  const filtered = _activeFreq ? _veiculacoesAll.filter((v) => v.frequencia === _activeFreq) : _veiculacoesAll
+  openRelatorioModal("Veiculações", filtered.length, exportarVeiculacoes)
+}
+
+async function exportarVeiculacoes(formato) {
+  try {
+    showLoading()
+    const data = document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
+    const params = { data }
+    if (_activeFreq) params.frequencia = _activeFreq
+    if (formato === "excel") {
+      await api.exportarVeiculacoesExcel(params)
+    } else {
+      await api.exportarVeiculacoesPdf(params)
+    }
+  } catch (error) {
+    showToast(error.message || "Erro ao exportar", "error")
+  } finally {
+    hideLoading()
+  }
+}

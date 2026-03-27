@@ -309,3 +309,33 @@ async function ensureResponsaveisLoaded() {
     }
   }
 }
+
+function abrirRelatorioComissoes() {
+  const mes = document.getElementById("filter-comissoes-mes")?.value
+  if (!mes) {
+    showToast("Selecione um mês antes de exportar", "warning")
+    return
+  }
+  openRelatorioModal("Comissões", null, exportarComissoes)
+}
+
+async function exportarComissoes(formato) {
+  try {
+    showLoading()
+    const mes = document.getElementById("filter-comissoes-mes")?.value || ""
+    if (!mes) {
+      showToast("Selecione um mês para exportar as comissões", "warning")
+      return
+    }
+    const params = { mes }
+    if (formato === "excel") {
+      await api.exportarComissoesExcel(params)
+    } else {
+      await api.exportarComissoesPdf(params)
+    }
+  } catch (error) {
+    showToast(error.message || "Erro ao exportar", "error")
+  } finally {
+    hideLoading()
+  }
+}

@@ -7,11 +7,13 @@ mas estes endpoints permitem consultar, corrigir e processar manualmente.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import datetime, date, timedelta
+from io import BytesIO
 
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_monitor_or_roles, require_roles
 from app.database import get_db
@@ -21,6 +23,7 @@ from app.services.veiculacoes_service import (
     buscar_item_contabilizado,
     processar_veiculacoes_periodo,
 )
+from app.services.export_service import build_excel, build_pdf, make_bar_chart
 
 
 router = APIRouter(
@@ -160,6 +163,118 @@ def listar_veiculacoes(
     veiculacoes = query.order_by(models.Veiculacao.data_hora.desc()).offset(skip).limit(limit).all()
     
     return veiculacoes
+
+
+# ── Exportação ───────────────────────────────────────────────────────────────
+
+_EXPORT_HEADERS_VEICULACOES = [
+    "Horário", "Frequência", "Arquivo", "Cliente", "Tipo Programa", "Contabilizado", "Contrato",
+]
+
+
+def _veiculacao_export_row(v) -> list:
+    contabilizado = "Sim" if v.contabilizada else "Não"
+    arquivo = v.arquivo_nome or v.nome_arquivo_raw or "-"
+    return [
+        v.data_hora.strftime("%H:%M:%S") if v.data_hora else "-",
+        v.frequencia or "-",
+        arquivo,
+        v.cliente_nome or "Não cadastrado",
+        v.tipo_programa or "-",
+        contabilizado,
+        v.numero_contrato or "-",
+    ]
+
+
+def _get_veiculacoes_export_query(db: Session, data: date, frequencia: Optional[str]):
+    inicio = datetime.combine(data, datetime.min.time())
+    fim = datetime.combine(data, datetime.max.time())
+    query = (
+        db.query(
+            models.Veiculacao.id,
+            models.Veiculacao.data_hora,
+            models.Veiculacao.frequencia,
+            models.Veiculacao.tipo_programa,
+            models.Veiculacao.contabilizada,
+            models.Veiculacao.nome_arquivo_raw,
+            models.ArquivoAudio.nome_arquivo.label("arquivo_nome"),
+            models.Cliente.nome.label("cliente_nome"),
+            models.Contrato.numero_contrato,
+        )
+        .outerjoin(models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id)
+        .outerjoin(models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id)
+        .outerjoin(models.Contrato, models.Veiculacao.contrato_id == models.Contrato.id)
+        .filter(models.Veiculacao.data_hora.between(inicio, fim))
+    )
+    if frequencia:
+        query = query.filter(models.Veiculacao.frequencia == frequencia)
+    return query.order_by(models.Veiculacao.data_hora)
+
+
+def _get_chart_veiculacoes_por_hora(rows) -> "object":
+    counts = [0] * 24
+    for v in rows:
+        if v.data_hora:
+            counts[v.data_hora.hour] += 1
+    return make_bar_chart(
+        [float(c) for c in counts],
+        [f"{h:02d}h" for h in range(24)],
+        title="Veiculações por Hora do Dia",
+        width=750,
+        height=160,
+        label_format=lambda v: str(int(v)) if v > 0 else "",
+    )
+
+
+@router.get("/exportar/excel")
+def exportar_veiculacoes_excel(
+    data: Optional[date] = Query(None, description="Data (padrão: hoje)"),
+    frequencia: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    data = data or date.today()
+    rows = _get_veiculacoes_export_query(db, data, frequencia).all()
+    export_data = [_veiculacao_export_row(v) for v in rows]
+    content = build_excel(_EXPORT_HEADERS_VEICULACOES, export_data, sheet_name="Veiculações")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=veiculacoes.xlsx"},
+    )
+
+
+@router.get("/exportar/pdf")
+def exportar_veiculacoes_pdf(
+    data: Optional[date] = Query(None, description="Data (padrão: hoje)"),
+    frequencia: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    data = data or date.today()
+    rows = _get_veiculacoes_export_query(db, data, frequencia).all()
+    export_data = [_veiculacao_export_row(v) for v in rows]
+
+    partes = [f"Data: {data.strftime('%d/%m/%Y')}"]
+    if frequencia:
+        partes.append(f"Frequência: {frequencia}")
+    filtros_texto = " | ".join(partes)
+
+    pre_content = [_get_chart_veiculacoes_por_hora(rows)] if rows else []
+
+    content = build_pdf(
+        _EXPORT_HEADERS_VEICULACOES,
+        export_data,
+        title="Relatório de Veiculações",
+        username=current_user.nome,
+        filtros_texto=filtros_texto,
+        pre_content=pre_content,
+    )
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=veiculacoes.pdf"},
+    )
 
 
 # ============================================

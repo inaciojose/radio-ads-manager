@@ -222,6 +222,40 @@ function changeNotasFiscaisPage(direction) {
   loadNotasFiscais(false)
 }
 
+function _buildNotasFiscaisExportParams() {
+  const statusNf = document.getElementById("filter-nf-status")?.value || ""
+  const clienteId = document.getElementById("filter-nf-cliente")?.value || ""
+  const competenciaRaw = document.getElementById("filter-nf-competencia")?.value || ""
+  const busca = document.getElementById("search-notas-fiscais")?.value?.trim() || ""
+
+  const params = {}
+  if (statusNf) params.status_nf = statusNf
+  if (clienteId) params.cliente_id = clienteId
+  if (competenciaRaw) params.competencia = competenciaRaw
+  if (busca) params.busca = busca
+  return params
+}
+
+function abrirRelatorioNotasFiscais() {
+  openRelatorioModal("Notas Fiscais", notasFiscaisState.total, exportarNotasFiscais)
+}
+
+async function exportarNotasFiscais(formato) {
+  try {
+    showLoading()
+    const params = _buildNotasFiscaisExportParams()
+    if (formato === "excel") {
+      await api.exportarNotasFiscaisExcel(params)
+    } else {
+      await api.exportarNotasFiscaisPdf(params)
+    }
+  } catch (error) {
+    showToast(error.message || "Erro ao exportar", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
 async function openContratoFromNotaFiscal(contratoId) {
   showPage("contratos")
   await loadContratos(contratosState.page)

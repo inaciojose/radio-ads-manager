@@ -9,13 +9,17 @@ Este arquivo contém todas as rotas (endpoints) relacionadas a clientes:
 - Deletar cliente
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from io import BytesIO
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app import models, schemas
+from app.services.export_service import build_excel, build_pdf
 
 
 # Criar o router (grupo de rotas relacionadas)
@@ -74,6 +78,79 @@ def listar_clientes(
 # ============================================
 # ENDPOINT: Buscar cliente específico
 # ============================================
+
+_EXPORT_HEADERS_CLIENTES = ["Nome", "CNPJ/CPF", "Email", "Telefone", "Status"]
+
+
+def _cliente_export_row(c) -> list:
+    return [
+        c.nome or "-",
+        c.cnpj_cpf or "-",
+        c.email or "-",
+        c.telefone or "-",
+        c.status or "-",
+    ]
+
+
+def _build_clientes_query(db: Session, status: Optional[str], busca: Optional[str]):
+    query = db.query(models.Cliente)
+    if status:
+        query = query.filter(models.Cliente.status == status)
+    if busca:
+        p = f"%{busca}%"
+        query = query.filter(
+            (models.Cliente.nome.ilike(p)) | (models.Cliente.cnpj_cpf.ilike(p))
+        )
+    return query.order_by(models.Cliente.nome)
+
+
+@router.get("/exportar/excel")
+def exportar_clientes_excel(
+    status: Optional[str] = Query(None),
+    busca: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    clientes = _build_clientes_query(db, status, busca).all()
+    data = [_cliente_export_row(c) for c in clientes]
+    content = build_excel(_EXPORT_HEADERS_CLIENTES, data, sheet_name="Clientes")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=clientes.xlsx"},
+    )
+
+
+@router.get("/exportar/pdf")
+def exportar_clientes_pdf(
+    status: Optional[str] = Query(None),
+    busca: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    clientes = _build_clientes_query(db, status, busca).all()
+    data = [_cliente_export_row(c) for c in clientes]
+
+    partes = []
+    if status:
+        partes.append(f"Status: {status.capitalize()}")
+    if busca:
+        partes.append(f"Busca: {busca}")
+    filtros_texto = " | ".join(partes) if partes else None
+
+    content = build_pdf(
+        _EXPORT_HEADERS_CLIENTES,
+        data,
+        title="Relatório de Clientes",
+        username=current_user.nome,
+        filtros_texto=filtros_texto,
+    )
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=clientes.pdf"},
+    )
+
 
 @router.get("/{cliente_id}", response_model=schemas.ClienteResponse)
 def buscar_cliente(
