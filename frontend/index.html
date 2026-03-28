@@ -106,6 +106,14 @@
           <i class="fas fa-user-shield"></i>
           <span>Usuários</span>
         </a>
+        <a
+          href="#caixeta"
+          class="nav-item"
+          onclick="showPage('caixeta', event)"
+        >
+          <i class="fas fa-th-list"></i>
+          <span>Caixeta</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -756,6 +764,57 @@
               <button id="notas-fiscais-next" class="btn btn-secondary" onclick="changeNotasFiscaisPage(1)">
                 Próxima <i class="fas fa-chevron-right"></i>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- PAGE: Caixeta                                                -->
+        <!-- ============================================================ -->
+        <div id="page-caixeta" class="page">
+          <div class="page-header">
+            <h2 style="margin: 0; font-size: 1.1rem;">Grade de Comerciais</h2>
+            <div class="page-actions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button id="btn-caixeta-semana" class="btn btn-secondary" onclick="switchCaixetaTipo('semana')">
+                <i class="fas fa-calendar-week"></i> Grade Semana
+              </button>
+              <button id="btn-caixeta-sabado" class="btn btn-secondary" onclick="switchCaixetaTipo('sabado')">
+                <i class="fas fa-calendar-day"></i> Grade Sábado
+              </button>
+              <button class="btn btn-primary" onclick="baixarCaixetaPdf()">
+                <i class="fas fa-file-pdf"></i> Baixar PDF
+              </button>
+              <button
+                id="btn-editar-caixeta"
+                class="btn btn-secondary"
+                data-requires-write="true"
+                style="display: none"
+                onclick="entrarEdicaoCaixeta()"
+              >
+                <i class="fas fa-edit"></i> Editar Grade
+              </button>
+            </div>
+          </div>
+
+          <!-- Modo visualização -->
+          <div id="caixeta-view">
+            <div id="caixeta-meta"></div>
+            <div id="caixeta-blocos"></div>
+          </div>
+
+          <!-- Modo edição -->
+          <div id="caixeta-edit" style="display: none">
+            <div id="caixeta-edit-blocos"></div>
+            <div style="margin-top: 1rem;">
+              <button class="btn btn-secondary" onclick="addBlocoCaixeta()">
+                <i class="fas fa-plus"></i> Adicionar Bloco
+              </button>
+            </div>
+            <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary" onclick="salvarCaixeta()">
+                <i class="fas fa-save"></i> Salvar Grade
+              </button>
+              <button class="btn btn-secondary" onclick="cancelarEdicaoCaixeta()">Cancelar</button>
             </div>
           </div>
         </div>
@@ -1587,6 +1646,7 @@
     <script src="js/usuarios.js"></script>
     <script src="js/programas.js"></script>
     <script src="js/responsaveis.js"></script>
+    <script src="js/caixeta.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

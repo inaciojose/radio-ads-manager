@@ -106,7 +106,7 @@ function canManageUsers() {
 }
 
 function isPublicPage(pageName) {
-  return pageName === "dashboard" || pageName === "veiculacoes"
+  return pageName === "dashboard" || pageName === "veiculacoes" || pageName === "caixeta"
 }
 
 function canAccessPage(pageName) {
@@ -288,6 +288,7 @@ function showPage(pageName, evt) {
     programas: "Programas",
     responsaveis: "Responsáveis",
     usuarios: "Usuários",
+    caixeta: "Grade de Comerciais",
   }
   document.getElementById("page-title").textContent = titles[pageName]
 
@@ -329,6 +330,8 @@ async function loadPageData(pageName) {
       return loadProgramas()
     case "responsaveis":
       return loadResponsaveis()
+    case "caixeta":
+      return loadCaixeta()
     case "usuarios":
       if (canManageUsers()) {
         return loadUsuarios()

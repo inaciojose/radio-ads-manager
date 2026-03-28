@@ -734,6 +734,18 @@ class API {
     const qs = new URLSearchParams(params).toString()
     await this.downloadBlob(`/clientes/exportar/pdf${qs ? "?" + qs : ""}`, "clientes.pdf")
   }
+
+  async getCaixeta(tipo) {
+    return this.request(`/caixeta/${tipo}`)
+  }
+
+  async saveCaixeta(tipo, payload) {
+    return this.request(`/caixeta/${tipo}`, { method: "PUT", body: JSON.stringify(payload) })
+  }
+
+  async downloadCaixetaPdf(tipo) {
+    await this.downloadBlob(`/caixeta/${tipo}/pdf`, `caixeta_${tipo}.pdf`)
+  }
 }
 
 // Instância global da API

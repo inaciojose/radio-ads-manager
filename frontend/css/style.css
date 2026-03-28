@@ -1281,3 +1281,143 @@ body.sidebar-collapsed #api-status-text {
     align-items: stretch;
   }
 }
+
+/* ============================================================
+   Caixeta — Grade de Comerciais
+   ============================================================ */
+
+.caixeta-meta-text {
+  display: block;
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 1rem;
+}
+
+.caixeta-vazia {
+  text-align: center;
+  padding: 2rem;
+  color: #888;
+}
+
+/* Bloco */
+.caixeta-bloco {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.caixeta-bloco--atual {
+  border-color: #2C3E7A;
+  box-shadow: 0 0 0 2px rgba(44, 62, 122, 0.15);
+}
+
+.caixeta-bloco-header {
+  background: #f4f6ff;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.caixeta-bloco--atual .caixeta-bloco-header {
+  background: #2C3E7A;
+}
+
+.caixeta-programa {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1a1a2e;
+}
+
+.caixeta-bloco--atual .caixeta-programa {
+  color: #fff;
+}
+
+/* Horários */
+.caixeta-horarios {
+  padding: 0.25rem 0;
+}
+
+.caixeta-horario {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.caixeta-horario:last-child {
+  border-bottom: none;
+}
+
+.caixeta-horario--atual {
+  background: #eef2ff;
+}
+
+.caixeta-hora {
+  font-weight: 700;
+  color: #2C3E7A;
+  font-size: 0.9rem;
+  min-width: 3.5rem;
+  padding-top: 0.1rem;
+}
+
+.caixeta-comerciais {
+  margin: 0;
+  padding: 0;
+  list-style: disc;
+  padding-left: 1.1rem;
+  font-size: 0.875rem;
+  color: #333;
+}
+
+.caixeta-obs {
+  font-size: 0.8rem;
+  color: #666;
+  font-style: italic;
+  padding: 0.4rem 1rem 0.6rem;
+  border-top: 1px dashed #e0e0e0;
+}
+
+/* Modo Edição */
+.caixeta-edit-bloco {
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.caixeta-edit-bloco-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.caixeta-edit-bloco-header .form-control {
+  flex: 1;
+}
+
+.caixeta-edit-bloco-num {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.caixeta-edit-horarios {
+  margin-bottom: 0.5rem;
+}
+
+.caixeta-edit-horario-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  gap: 0.5rem;
+  align-items: start;
+  margin-bottom: 0.5rem;
+}
+
+.caixeta-time-input {
+  width: 100%;
+}
