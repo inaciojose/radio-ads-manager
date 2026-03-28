@@ -408,6 +408,68 @@ class Comissionamento(Base):
 
 
 # ============================================
+# MODELO: Caixeta (Grade de Comerciais)
+# ============================================
+
+class Caixeta(Base):
+    """Grade de comerciais da rádio (Caixeta)."""
+    __tablename__ = "caixeta"
+
+    id = Column(Integer, primary_key=True)
+    tipo = Column(String(10), nullable=False, unique=True)  # 'semana' | 'sabado'
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(120), nullable=True)
+
+    blocos = relationship(
+        "CaixetaBloco",
+        back_populates="caixeta",
+        cascade="all, delete-orphan",
+        order_by="CaixetaBloco.ordem",
+    )
+
+    def __repr__(self):
+        return f"<Caixeta(tipo={self.tipo!r})>"
+
+
+class CaixetaBloco(Base):
+    """Bloco de programação dentro de uma caixeta."""
+    __tablename__ = "caixeta_bloco"
+
+    id = Column(Integer, primary_key=True)
+    caixeta_id = Column(Integer, ForeignKey("caixeta.id"), nullable=False)
+    nome_programa = Column(String(200), nullable=False)
+    observacao = Column(Text, nullable=True)
+    ordem = Column(Integer, default=0, nullable=False)
+
+    caixeta = relationship("Caixeta", back_populates="blocos")
+    horarios = relationship(
+        "CaixetaHorario",
+        back_populates="bloco",
+        cascade="all, delete-orphan",
+        order_by="CaixetaHorario.ordem",
+    )
+
+    def __repr__(self):
+        return f"<CaixetaBloco(id={self.id}, programa={self.nome_programa!r})>"
+
+
+class CaixetaHorario(Base):
+    """Horário e lista de comerciais dentro de um bloco."""
+    __tablename__ = "caixeta_horario"
+
+    id = Column(Integer, primary_key=True)
+    bloco_id = Column(Integer, ForeignKey("caixeta_bloco.id"), nullable=False)
+    horario = Column(String(10), nullable=False)  # "HH:MM"
+    comerciais = Column(Text, nullable=True)       # um por linha
+    ordem = Column(Integer, default=0, nullable=False)
+
+    bloco = relationship("CaixetaBloco", back_populates="horarios")
+
+    def __repr__(self):
+        return f"<CaixetaHorario(id={self.id}, horario={self.horario!r})>"
+
+
+# ============================================
 # MÉTODOS ÚTEIS
 # ============================================
 

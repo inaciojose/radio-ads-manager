@@ -819,6 +819,52 @@ class ApiKeyCreateResponse(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Caixeta
+# ============================================
+
+class CaixetaHorarioIn(BaseModel):
+    horario: str = Field(..., description="Horário no formato HH:MM")
+    comerciais: Optional[str] = None
+    ordem: int = 0
+
+
+class CaixetaHorarioOut(BaseModel):
+    id: int
+    horario: str
+    comerciais: Optional[str] = None
+    ordem: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CaixetaBlocoIn(BaseModel):
+    nome_programa: str = Field(..., min_length=1, max_length=200)
+    observacao: Optional[str] = None
+    ordem: int = 0
+    horarios: List[CaixetaHorarioIn] = []
+
+
+class CaixetaBlocoOut(BaseModel):
+    id: int
+    nome_programa: str
+    observacao: Optional[str] = None
+    ordem: int
+    horarios: List[CaixetaHorarioOut] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CaixetaResponse(BaseModel):
+    tipo: str
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+    blocos: List[CaixetaBlocoOut] = []
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CaixetaSaveRequest(BaseModel):
+    blocos: List[CaixetaBlocoIn] = []
+
+
+# ============================================
 # SCHEMAS: Respostas Padrão
 # ============================================
 

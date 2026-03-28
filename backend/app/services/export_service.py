@@ -367,3 +367,108 @@ def make_line_chart(
 
     d.add(lp)
     return d
+
+
+# ── Caixeta PDF ───────────────────────────────────────────────────────────────
+
+def build_caixeta_pdf(caixeta, tipo: str) -> bytes:
+    """Gera PDF da caixeta em 3 colunas: #, Programa/Horário/Comerciais, Observações."""
+    import html as _html
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
+
+    tipo_label = "Dias de Semana (Segunda a Sexta)" if tipo == "semana" else "Sábado"
+    title = f"Caixeta — {tipo_label}"
+    username = getattr(caixeta, "updated_by", None)
+
+    buf = BytesIO()
+    header_fn = _make_header_footer_fn(_LOGO_PATH, title, username, None)
+    NumberedCanvas = _make_numbered_canvas(header_fn)
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        rightMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        topMargin=88,
+        bottomMargin=34,
+    )
+
+    page_w = A4[0]
+    content_w = page_w - 3 * cm
+    col_widths = [32, content_w - 130, 98]
+
+    styles = getSampleStyleSheet()
+    s_base = styles["Normal"]
+    s_seq = ParagraphStyle("cseq", parent=s_base, fontName="Helvetica-Bold", fontSize=9,
+                            alignment=1, textColor=colors.HexColor("#2C3E7A"))
+    s_content = ParagraphStyle("ccon", parent=s_base, fontSize=8, leading=12)
+    s_obs = ParagraphStyle("cobs", parent=s_base, fontSize=8, leading=12,
+                            textColor=colors.HexColor("#555555"))
+
+    data = [[
+        Paragraph("#", ParagraphStyle("ch", parent=s_base, fontName="Helvetica-Bold",
+                                       fontSize=8, textColor=colors.white, alignment=1)),
+        Paragraph("Programa / Horário / Comerciais",
+                  ParagraphStyle("ch2", parent=s_base, fontName="Helvetica-Bold",
+                                  fontSize=8, textColor=colors.white)),
+        Paragraph("Observações",
+                  ParagraphStyle("ch3", parent=s_base, fontName="Helvetica-Bold",
+                                  fontSize=8, textColor=colors.white)),
+    ]]
+
+    def _content_para(bloco, horario):
+        parts = [f"<b>{_html.escape(bloco.nome_programa or '—')}</b>"]
+        if horario:
+            parts.append(f"<font color='#2C3E7A'><b>{_html.escape(horario.horario)}</b></font>")
+            for line in (horario.comerciais or "").strip().split("\n"):
+                line = line.strip()
+                if line:
+                    parts.append(f"• {_html.escape(line)}")
+        return Paragraph("<br/>".join(parts), s_content)
+
+    seq = 1
+    alt = colors.HexColor("#F4F6FF")
+    row_idx = 1
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C3E7A")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ALIGN", (0, 1), (0, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#BBBBBB")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]
+
+    blocos = sorted(getattr(caixeta, "blocos", []) or [], key=lambda b: b.ordem)
+    for bloco in blocos:
+        horarios = sorted(getattr(bloco, "horarios", []) or [], key=lambda h: h.ordem)
+        first = True
+        for horario in horarios or [None]:
+            data.append([
+                Paragraph(str(seq) if horario else "–", s_seq),
+                _content_para(bloco, horario),
+                Paragraph(_html.escape(bloco.observacao or "") if first else "", s_obs),
+            ])
+            if row_idx % 2 == 0:
+                style_cmds.append(("BACKGROUND", (0, row_idx), (-1, row_idx), alt))
+            if horario:
+                seq += 1
+            first = False
+            row_idx += 1
+        if not horarios:
+            seq += 1
+
+    if len(data) == 1:
+        data.append(["–", Paragraph("Grade vazia.", s_content), ""])
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle(style_cmds))
+    doc.build([table], canvasmaker=NumberedCanvas)
+    buf.seek(0)
+    return buf.read()

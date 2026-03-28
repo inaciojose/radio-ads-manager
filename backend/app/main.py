@@ -16,7 +16,7 @@ from typing import Any
 
 from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings
-from app.routers import arquivos, auth, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
+from app.routers import arquivos, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 
 
@@ -354,6 +354,9 @@ app.include_router(auth.router)
 
 # Registrar usuários
 app.include_router(usuarios.router)
+
+# Registrar grade de comerciais (caixeta)
+app.include_router(caixeta.router)
 
 
 # ============================================
