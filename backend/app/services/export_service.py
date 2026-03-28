@@ -372,13 +372,12 @@ def make_line_chart(
 # ── Caixeta PDF ───────────────────────────────────────────────────────────────
 
 def build_caixeta_pdf(caixeta, tipo: str) -> bytes:
-    """Gera PDF da caixeta em 3 colunas: #, Programa/Horário/Comerciais, Observações."""
-    import html as _html
+    """Gera PDF da caixeta agrupado por bloco: cabeçalho + tabela Horário|Comercial|Observação."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     tipo_label = "Dias de Semana (Segunda a Sexta)" if tipo == "semana" else "Sábado"
     title = f"Caixeta — {tipo_label}"
@@ -397,78 +396,99 @@ def build_caixeta_pdf(caixeta, tipo: str) -> bytes:
         bottomMargin=34,
     )
 
-    page_w = A4[0]
-    content_w = page_w - 3 * cm
-    col_widths = [32, content_w - 130, 98]
+    content_w = A4[0] - 3 * cm
+    col_widths = [52, content_w - 52 - 160, 160]
 
     styles = getSampleStyleSheet()
     s_base = styles["Normal"]
-    s_seq = ParagraphStyle("cseq", parent=s_base, fontName="Helvetica-Bold", fontSize=9,
-                            alignment=1, textColor=colors.HexColor("#2C3E7A"))
-    s_content = ParagraphStyle("ccon", parent=s_base, fontSize=8, leading=12)
-    s_obs = ParagraphStyle("cobs", parent=s_base, fontSize=8, leading=12,
-                            textColor=colors.HexColor("#555555"))
 
-    data = [[
-        Paragraph("#", ParagraphStyle("ch", parent=s_base, fontName="Helvetica-Bold",
-                                       fontSize=8, textColor=colors.white, alignment=1)),
-        Paragraph("Programa / Horário / Comerciais",
-                  ParagraphStyle("ch2", parent=s_base, fontName="Helvetica-Bold",
-                                  fontSize=8, textColor=colors.white)),
-        Paragraph("Observações",
-                  ParagraphStyle("ch3", parent=s_base, fontName="Helvetica-Bold",
-                                  fontSize=8, textColor=colors.white)),
-    ]]
+    NAVY        = colors.HexColor("#2C3E7A")
+    HEADER_BG   = colors.HexColor("#EEF0FB")
+    HORA_BG     = colors.HexColor("#F5F6FF")
+    BORDER      = colors.HexColor("#B0B8E0")
+    DESTAQUE_BG = colors.HexColor("#F5F0E8")
 
-    def _content_para(bloco, horario):
-        parts = [f"<b>{_html.escape(bloco.nome_programa or '—')}</b>"]
-        if horario:
-            parts.append(f"<font color='#2C3E7A'><b>{_html.escape(horario.horario)}</b></font>")
-            for line in (horario.comerciais or "").strip().split("\n"):
-                line = line.strip()
-                if line:
-                    parts.append(f"• {_html.escape(line)}")
-        return Paragraph("<br/>".join(parts), s_content)
+    s_bloco = ParagraphStyle("cbloco", parent=s_base, fontName="Helvetica-Bold",
+                              fontSize=9, textColor=colors.white)
+    s_col_h = ParagraphStyle("ccolh", parent=s_base, fontName="Helvetica-Bold",
+                              fontSize=7, textColor=NAVY)
+    s_hora  = ParagraphStyle("chora", parent=s_base, fontName="Helvetica-Bold",
+                              fontSize=9, textColor=NAVY, alignment=1)
+    s_com   = ParagraphStyle("ccom",  parent=s_base, fontSize=8, leading=11)
+    s_obs   = ParagraphStyle("cobs",  parent=s_base, fontSize=8, leading=11,
+                              textColor=colors.HexColor("#666666"))
 
-    seq = 1
-    alt = colors.HexColor("#F4F6FF")
-    row_idx = 1
-    style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C3E7A")),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("ALIGN", (0, 1), (0, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#BBBBBB")),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    PAD = [
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
     ]
 
-    blocos = sorted(getattr(caixeta, "blocos", []) or [], key=lambda b: b.ordem)
-    for bloco in blocos:
+    def _build_bloco_table(bloco):
         horarios = sorted(getattr(bloco, "horarios", []) or [], key=lambda h: h.ordem)
-        first = True
-        for horario in horarios or [None]:
-            data.append([
-                Paragraph(str(seq) if horario else "–", s_seq),
-                _content_para(bloco, horario),
-                Paragraph(_html.escape(bloco.observacao or "") if first else "", s_obs),
-            ])
-            if row_idx % 2 == 0:
-                style_cmds.append(("BACKGROUND", (0, row_idx), (-1, row_idx), alt))
-            if horario:
-                seq += 1
-            first = False
-            row_idx += 1
-        if not horarios:
-            seq += 1
 
-    if len(data) == 1:
-        data.append(["–", Paragraph("Grade vazia.", s_content), ""])
+        data = [
+            [Paragraph(bloco.nome_programa or "—", s_bloco), "", ""],
+            [Paragraph("Horário", s_col_h), Paragraph("Comercial", s_col_h),
+             Paragraph("Observação", s_col_h)],
+        ]
+        cmds = [
+            # cabeçalho do bloco
+            ("SPAN",       (0, 0), (2, 0)),
+            ("BACKGROUND", (0, 0), (2, 0), NAVY),
+            # cabeçalho de colunas
+            ("BACKGROUND", (0, 1), (2, 1), HEADER_BG),
+            # grade geral
+            ("GRID",    (0, 0), (-1, -1), 0.4, BORDER),
+            ("VALIGN",  (0, 0), (-1, -1), "MIDDLE"),
+            *PAD,
+        ]
 
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle(style_cmds))
-    doc.build([table], canvasmaker=NumberedCanvas)
+        row_idx = 2
+
+        for horario in horarios:
+            comerciais = sorted(getattr(horario, "comerciais", []) or [], key=lambda c: c.ordem)
+
+            if not comerciais:
+                data.append([Paragraph(horario.horario, s_hora), Paragraph("—", s_com), ""])
+                cmds.append(("BACKGROUND", (0, row_idx), (0, row_idx), HORA_BG))
+                row_idx += 1
+                continue
+
+            start = row_idx
+            for ci, com in enumerate(comerciais):
+                hora_cell = Paragraph(horario.horario, s_hora) if ci == 0 else ""
+                data.append([
+                    hora_cell,
+                    Paragraph(f"• {com.nome}", s_com),
+                    Paragraph(com.observacao or "", s_obs),
+                ])
+                if getattr(com, "destaque", False):
+                    cmds.append(("BACKGROUND", (1, row_idx), (1, row_idx), DESTAQUE_BG))
+                row_idx += 1
+
+            cmds.append(("BACKGROUND", (0, start), (0, row_idx - 1), HORA_BG))
+            if len(comerciais) > 1:
+                cmds.append(("SPAN", (0, start), (0, row_idx - 1)))
+
+        if len(data) == 2:
+            data.append(["", Paragraph("Nenhum horário cadastrado.", s_obs), ""])
+
+        table = Table(data, colWidths=col_widths, repeatRows=2)
+        table.setStyle(TableStyle(cmds))
+        return table
+
+    blocos = sorted(getattr(caixeta, "blocos", []) or [], key=lambda b: b.ordem)
+
+    flowables = []
+    for bloco in blocos:
+        flowables.append(_build_bloco_table(bloco))
+        flowables.append(Spacer(0, 8))
+
+    if not flowables:
+        flowables.append(Paragraph("Grade vazia.", s_com))
+
+    doc.build(flowables, canvasmaker=NumberedCanvas)
     buf.seek(0)
     return buf.read()
