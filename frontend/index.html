@@ -114,6 +114,16 @@
           <i class="fas fa-th-list"></i>
           <span>Caixeta</span>
         </a>
+        <a
+          href="#audit-log"
+          class="nav-item"
+          data-admin-only="true"
+          style="display: none"
+          onclick="showPage('audit-log', event)"
+        >
+          <i class="fas fa-clipboard-list"></i>
+          <span>Audit Log</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -818,6 +828,89 @@
             </div>
           </div>
         </div>
+
+        <!-- ============================================================ -->
+        <!-- PAGE: Audit Log                                              -->
+        <!-- ============================================================ -->
+        <div id="page-audit-log" class="page">
+          <div class="page-header">
+            <h2 style="margin: 0; font-size: 1.1rem;">Audit Log</h2>
+            <div class="page-actions">
+              <button class="btn btn-secondary btn-refresh" onclick="refreshCurrentPage(event)">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+              <button class="btn btn-primary" onclick="abrirRelatorioAuditLog()">
+                <i class="fas fa-file-export"></i> Imprimir Relatório
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros -->
+          <div class="audit-log-filtros card">
+            <div class="audit-log-filtros-grid">
+              <div class="form-group">
+                <label>De</label>
+                <input type="date" id="audit-filtro-data-inicio" oninput="filtrarAuditLog()" />
+              </div>
+              <div class="form-group">
+                <label>Até</label>
+                <input type="date" id="audit-filtro-data-fim" oninput="filtrarAuditLog()" />
+              </div>
+              <div class="form-group">
+                <label>Área</label>
+                <select id="audit-filtro-area" onchange="filtrarAuditLog()">
+                  <option value="">Todas</option>
+                  <option value="Clientes">Clientes</option>
+                  <option value="Contratos">Contratos</option>
+                  <option value="Notas Fiscais">Notas Fiscais</option>
+                  <option value="Veiculações">Veiculações</option>
+                  <option value="Responsáveis">Responsáveis</option>
+                  <option value="Programas">Programas</option>
+                  <option value="Usuários">Usuários</option>
+                  <option value="Arquivos">Arquivos</option>
+                  <option value="Caixeta">Caixeta</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Ação</label>
+                <select id="audit-filtro-acao" onchange="filtrarAuditLog()">
+                  <option value="">Todas</option>
+                  <option value="criado">Criado</option>
+                  <option value="editado">Editado</option>
+                  <option value="excluído">Excluído</option>
+                  <option value="inativado">Inativado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div class="form-group" style="align-self: flex-end;">
+                <button class="btn btn-secondary" onclick="limparFiltrosAuditLog()">
+                  <i class="fas fa-times"></i> Limpar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabela -->
+          <div class="card">
+            <div id="audit-log-summary" class="audit-log-summary"></div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Usuário</th>
+                    <th>Área</th>
+                    <th>Ação</th>
+                    <th>Registro</th>
+                    <th>Detalhe</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-log-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1647,6 +1740,7 @@
     <script src="js/programas.js"></script>
     <script src="js/responsaveis.js"></script>
     <script src="js/caixeta.js"></script>
+    <script src="js/audit_log.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

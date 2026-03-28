@@ -111,7 +111,7 @@ function isPublicPage(pageName) {
 
 function canAccessPage(pageName) {
   if (isPublicPage(pageName)) return true
-  if (pageName === "usuarios") return canManageUsers()
+  if (pageName === "usuarios" || pageName === "audit-log") return canManageUsers()
   return Boolean(appState.user)
 }
 
@@ -124,7 +124,7 @@ function requirePageAccess(pageName) {
     return false
   }
 
-  if (pageName === "usuarios") {
+  if (pageName === "usuarios" || pageName === "audit-log") {
     showToast("Acesso restrito a administradores", "warning")
     return false
   }
@@ -289,6 +289,7 @@ function showPage(pageName, evt) {
     responsaveis: "Responsáveis",
     usuarios: "Usuários",
     caixeta: "Grade de Comerciais",
+    "audit-log": "Audit Log",
   }
   document.getElementById("page-title").textContent = titles[pageName]
 
@@ -332,6 +333,13 @@ async function loadPageData(pageName) {
       return loadResponsaveis()
     case "caixeta":
       return loadCaixeta()
+    case "audit-log":
+      if (canManageUsers()) {
+        return loadAuditLog()
+      } else {
+        showToast("Acesso restrito a administradores", "warning")
+      }
+      break
     case "usuarios":
       if (canManageUsers()) {
         return loadUsuarios()

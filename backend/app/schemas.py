@@ -822,23 +822,38 @@ class ApiKeyCreateResponse(BaseModel):
 # SCHEMAS: Caixeta
 # ============================================
 
+class CaixetaComercialIn(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=300)
+    observacao: Optional[str] = None
+    destaque: bool = False
+    ordem: int = 0
+
+
+class CaixetaComercialOut(BaseModel):
+    id: int
+    nome: str
+    observacao: Optional[str] = None
+    destaque: bool = False
+    ordem: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CaixetaHorarioIn(BaseModel):
     horario: str = Field(..., description="Horário no formato HH:MM")
-    comerciais: Optional[str] = None
+    comerciais: List[CaixetaComercialIn] = []
     ordem: int = 0
 
 
 class CaixetaHorarioOut(BaseModel):
     id: int
     horario: str
-    comerciais: Optional[str] = None
+    comerciais: List[CaixetaComercialOut] = []
     ordem: int
     model_config = ConfigDict(from_attributes=True)
 
 
 class CaixetaBlocoIn(BaseModel):
     nome_programa: str = Field(..., min_length=1, max_length=200)
-    observacao: Optional[str] = None
     ordem: int = 0
     horarios: List[CaixetaHorarioIn] = []
 
@@ -846,7 +861,6 @@ class CaixetaBlocoIn(BaseModel):
 class CaixetaBlocoOut(BaseModel):
     id: int
     nome_programa: str
-    observacao: Optional[str] = None
     ordem: int
     horarios: List[CaixetaHorarioOut] = []
     model_config = ConfigDict(from_attributes=True)
@@ -862,6 +876,29 @@ class CaixetaResponse(BaseModel):
 
 class CaixetaSaveRequest(BaseModel):
     blocos: List[CaixetaBlocoIn] = []
+
+
+# ============================================
+# SCHEMAS: AuditLog
+# ============================================
+
+class AuditLogItem(BaseModel):
+    id: int
+    data_hora: datetime
+    usuario_id: Optional[int] = None
+    usuario_nome: Optional[str] = None
+    area: str
+    acao: str
+    registro_id: Optional[str] = None
+    registro_descricao: Optional[str] = None
+    detalhe: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditLogListResponse(BaseModel):
+    items: List[AuditLogItem]
+    total: int
 
 
 # ============================================

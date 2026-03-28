@@ -16,8 +16,9 @@ from typing import Any
 
 from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings
-from app.routers import arquivos, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
+from app.routers import arquivos, audit_log, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
+from app.services.audit_service import limpar_logs_antigos
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -59,6 +60,12 @@ async def lifespan(app: FastAPI):
         n = auto_concluir_contratos_expirados(db)
         if n:
             print(f"📋 {n} contrato(s) concluído(s) automaticamente")
+
+    # Remover entradas de audit log com mais de 30 dias
+    with SessionLocal() as db:
+        n_audit = limpar_logs_antigos(db, dias=30)
+        if n_audit:
+            print(f"🗑️  {n_audit} registro(s) de audit log removido(s) (>30 dias)")
 
     # Mostrar informações do banco
     db_info = get_database_info()
@@ -357,6 +364,9 @@ app.include_router(usuarios.router)
 
 # Registrar grade de comerciais (caixeta)
 app.include_router(caixeta.router)
+
+# Registrar audit log (somente admin)
+app.include_router(audit_log.router)
 
 
 # ============================================

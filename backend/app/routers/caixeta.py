@@ -10,6 +10,7 @@ from app import models, schemas
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app.services.export_service import build_caixeta_pdf
+from app.services import audit_service as audit
 
 router = APIRouter(prefix="/caixeta", tags=["Caixeta"])
 
@@ -71,25 +72,40 @@ def salvar_caixeta(
         db.delete(bloco)
     db.flush()
 
-    # Insere novos blocos e horários
+    # Insere novos blocos, horários e comerciais
     for i, bd in enumerate(payload.blocos):
         bloco = models.CaixetaBloco(
             caixeta_id=caixeta.id,
             nome_programa=bd.nome_programa,
-            observacao=bd.observacao,
             ordem=i,
         )
         db.add(bloco)
         db.flush()
         for j, hd in enumerate(bd.horarios):
-            db.add(models.CaixetaHorario(
+            horario = models.CaixetaHorario(
                 bloco_id=bloco.id,
                 horario=hd.horario,
-                comerciais=hd.comerciais,
                 ordem=j,
-            ))
+            )
+            db.add(horario)
+            db.flush()
+            for k, cd in enumerate(hd.comerciais):
+                db.add(models.CaixetaComercial(
+                    horario_id=horario.id,
+                    nome=cd.nome,
+                    observacao=cd.observacao,
+                    destaque=cd.destaque,
+                    ordem=k,
+                ))
 
     caixeta.updated_by = current_user.nome
+    num_blocos = len(payload.blocos)
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CAIXETA, audit.ACAO_EDITADO,
+        tipo, f"Grade {tipo}",
+        detalhe=f"{num_blocos} bloco(s) salvo(s)",
+    )
     db.commit()
     db.refresh(caixeta)
     return caixeta

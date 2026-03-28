@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_monitor_or_roles, require_roles
 from app import models, schemas
 from app.database import get_db
+from app.services import audit_service as audit
 
 
 router = APIRouter(
@@ -104,7 +105,7 @@ def buscar_arquivo(
 def criar_arquivo(
     arquivo: schemas.ArquivoAudioCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     cliente = db.query(models.Cliente).filter(models.Cliente.id == arquivo.cliente_id).first()
     if not cliente:
@@ -126,6 +127,12 @@ def criar_arquivo(
 
     db_arquivo = models.ArquivoAudio(**arquivo.model_dump())
     db.add(db_arquivo)
+    db.flush()
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_ARQUIVOS, audit.ACAO_CRIADO,
+        db_arquivo.id, db_arquivo.nome_arquivo,
+    )
     db.commit()
     db.refresh(db_arquivo)
     return db_arquivo
@@ -136,7 +143,7 @@ def atualizar_arquivo(
     arquivo_id: int,
     arquivo_update: schemas.ArquivoAudioUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:
@@ -149,6 +156,11 @@ def atualizar_arquivo(
     for field, value in update_data.items():
         setattr(db_arquivo, field, value)
 
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_ARQUIVOS, audit.ACAO_EDITADO,
+        arquivo_id, db_arquivo.nome_arquivo,
+    )
     db.commit()
     db.refresh(db_arquivo)
     return db_arquivo
@@ -158,7 +170,7 @@ def atualizar_arquivo(
 def toggle_arquivo_ativo(
     arquivo_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:
@@ -168,6 +180,13 @@ def toggle_arquivo_ativo(
         )
 
     db_arquivo.ativo = not db_arquivo.ativo
+    novo_status = "ativo" if db_arquivo.ativo else "inativo"
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_ARQUIVOS, audit.ACAO_EDITADO,
+        arquivo_id, db_arquivo.nome_arquivo,
+        detalhe=f"ativo={novo_status}",
+    )
     db.commit()
     db.refresh(db_arquivo)
     return db_arquivo
@@ -177,7 +196,7 @@ def toggle_arquivo_ativo(
 def deletar_arquivo(
     arquivo_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_arquivo = db.query(models.ArquivoAudio).filter(models.ArquivoAudio.id == arquivo_id).first()
     if not db_arquivo:
@@ -186,10 +205,16 @@ def deletar_arquivo(
             detail=f"Arquivo com ID {arquivo_id} nao encontrado",
         )
 
+    nome_arquivo = db_arquivo.nome_arquivo
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_ARQUIVOS, audit.ACAO_EXCLUIDO,
+        arquivo_id, nome_arquivo,
+    )
     db.delete(db_arquivo)
     db.commit()
     return {
-        "message": f"Arquivo '{db_arquivo.nome_arquivo}' deletado com sucesso",
+        "message": f"Arquivo '{nome_arquivo}' deletado com sucesso",
         "success": True,
     }
 

@@ -20,6 +20,7 @@ from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
 from app import models, schemas
 from app.services.export_service import build_excel, build_pdf
+from app.services import audit_service as audit
 
 
 # Criar o router (grupo de rotas relacionadas)
@@ -182,7 +183,7 @@ def buscar_cliente(
 def criar_cliente(
     cliente: schemas.ClienteCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Cria um novo cliente.
@@ -211,9 +212,15 @@ def criar_cliente(
     # Criar novo cliente
     db_cliente = models.Cliente(**cliente.model_dump())
     db.add(db_cliente)
+    db.flush()
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CLIENTES, audit.ACAO_CRIADO,
+        db_cliente.id, db_cliente.nome,
+    )
     db.commit()
-    db.refresh(db_cliente)  # Atualiza com dados do banco (ID, timestamps, etc.)
-    
+    db.refresh(db_cliente)
+
     return db_cliente
 
 
@@ -226,7 +233,7 @@ def atualizar_cliente(
     cliente_id: int,
     cliente_update: schemas.ClienteUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Atualiza os dados de um cliente.
@@ -279,10 +286,17 @@ def atualizar_cliente(
     # Aplicar atualizações
     for field, value in update_data.items():
         setattr(db_cliente, field, value)
-    
+
+    acao = audit.ACAO_INATIVADO if update_data.get("status") == "inativo" else audit.ACAO_EDITADO
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CLIENTES, acao,
+        db_cliente.id, db_cliente.nome,
+        detalhe=", ".join(f"{k}={v}" for k, v in update_data.items()) or None,
+    )
     db.commit()
     db.refresh(db_cliente)
-    
+
     return db_cliente
 
 
@@ -294,7 +308,7 @@ def atualizar_cliente(
 def deletar_cliente(
     cliente_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
     Deleta um cliente.
@@ -326,12 +340,17 @@ def deletar_cliente(
             detail=f"Não é possível deletar cliente com {contratos_ativos} contrato(s) ativo(s). Cancele os contratos primeiro."
         )
     
-    # Deletar cliente
+    nome_cliente = db_cliente.nome
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CLIENTES, audit.ACAO_EXCLUIDO,
+        cliente_id, nome_cliente,
+    )
     db.delete(db_cliente)
     db.commit()
-    
+
     return {
-        "message": f"Cliente '{db_cliente.nome}' deletado com sucesso",
+        "message": f"Cliente '{nome_cliente}' deletado com sucesso",
         "success": True
     }
 

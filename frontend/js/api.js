@@ -746,6 +746,25 @@ class API {
   async downloadCaixetaPdf(tipo) {
     await this.downloadBlob(`/caixeta/${tipo}/pdf`, `caixeta_${tipo}.pdf`)
   }
+
+  // ============================================
+  // Audit Log
+  // ============================================
+
+  async getAuditLog(params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/audit-log/${query ? "?" + query : ""}`)
+  }
+
+  async exportarAuditLogExcel(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/audit-log/exportar/excel${qs ? "?" + qs : ""}`, "audit_log.xlsx")
+  }
+
+  async exportarAuditLogPdf(params) {
+    const qs = new URLSearchParams(params).toString()
+    await this.downloadBlob(`/audit-log/exportar/pdf${qs ? "?" + qs : ""}`, "audit_log.pdf")
+  }
 }
 
 // Instância global da API

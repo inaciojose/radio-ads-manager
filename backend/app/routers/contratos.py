@@ -22,6 +22,7 @@ from app.services.contratos_service import (
 )
 from app.services.veiculacoes_service import resolver_item_contrato_para_veiculacao
 from app.services.export_service import build_excel, build_pdf, make_bar_chart, make_pie_chart
+from app.services import audit_service as audit
 
 
 router = APIRouter(
@@ -815,7 +816,7 @@ def buscar_contrato(
 def criar_contrato(
     contrato: schemas.ContratoCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     cliente = db.query(models.Cliente).filter(models.Cliente.id == contrato.cliente_id).first()
     if not cliente:
@@ -846,8 +847,16 @@ def criar_contrato(
             db.add(nota)
             db.flush()
             _sincronizar_resumo_nf_contrato(db, db_contrato)
-            db.commit()
-            db.refresh(db_contrato)
+
+        cliente = db.query(models.Cliente).filter(models.Cliente.id == db_contrato.cliente_id).first()
+        audit.registrar(
+            db, current_user.id, current_user.nome,
+            audit.AREA_CONTRATOS, audit.ACAO_CRIADO,
+            db_contrato.id, db_contrato.numero_contrato,
+            detalhe=f"Cliente: {cliente.nome if cliente else db_contrato.cliente_id}",
+        )
+        db.commit()
+        db.refresh(db_contrato)
         return db_contrato
     except NumeroContratoConflictError:
         raise HTTPException(
@@ -1059,7 +1068,7 @@ def atualizar_contrato(
     contrato_id: int,
     contrato_update: schemas.ContratoUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not db_contrato:
@@ -1094,6 +1103,14 @@ def atualizar_contrato(
                 is_principal=c.get("is_principal", False),
             ))
 
+    campos_log = {k: v for k, v in update_data.items()}
+    acao = audit.ACAO_CANCELADO if campos_log.get("status_contrato") == "cancelado" else audit.ACAO_EDITADO
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CONTRATOS, acao,
+        contrato_id, db_contrato.numero_contrato,
+        detalhe=", ".join(f"{k}={v}" for k, v in campos_log.items()) or None,
+    )
     db.commit()
     db.refresh(db_contrato)
     return db_contrato
@@ -1148,7 +1165,7 @@ def criar_nota_fiscal_contrato(
     contrato_id: int,
     payload: schemas.NotaFiscalCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not contrato:
@@ -1191,6 +1208,15 @@ def criar_nota_fiscal_contrato(
         )
 
     _sincronizar_resumo_nf_contrato(db, contrato)
+    descricao_nf = nota.numero or f"NF #{nota.id}"
+    if nota.competencia:
+        descricao_nf += f" ({nota.competencia.strftime('%m/%Y')})"
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_NOTAS_FISCAIS, audit.ACAO_CRIADO,
+        nota.id, descricao_nf,
+        detalhe=f"Contrato: {contrato.numero_contrato}, status={nota.status}",
+    )
     db.commit()
     db.refresh(nota)
     return nota
@@ -1204,7 +1230,7 @@ def atualizar_nota_fiscal(
     nota_id: int,
     payload: schemas.NotaFiscalUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     nota = db.query(models.NotaFiscal).filter(models.NotaFiscal.id == nota_id).first()
     if not nota:
@@ -1227,6 +1253,14 @@ def atualizar_nota_fiscal(
 
     contrato = db.query(models.Contrato).filter(models.Contrato.id == nota.contrato_id).first()
     _sincronizar_resumo_nf_contrato(db, contrato)
+    acao_nf = audit.ACAO_CANCELADO if update_data.get("status") == "cancelada" else audit.ACAO_EDITADO
+    descricao_nf = nota.numero or f"NF #{nota.id}"
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_NOTAS_FISCAIS, acao_nf,
+        nota.id, descricao_nf,
+        detalhe=", ".join(f"{k}={v}" for k, v in update_data.items()) or None,
+    )
     db.commit()
     db.refresh(nota)
     return nota
@@ -1239,7 +1273,7 @@ def atualizar_nota_fiscal(
 def deletar_nota_fiscal(
     nota_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     nota = db.query(models.NotaFiscal).filter(models.NotaFiscal.id == nota_id).first()
     if not nota:
@@ -1249,6 +1283,13 @@ def deletar_nota_fiscal(
         )
 
     contrato = db.query(models.Contrato).filter(models.Contrato.id == nota.contrato_id).first()
+    descricao_nf = nota.numero or f"NF #{nota.id}"
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_NOTAS_FISCAIS, audit.ACAO_EXCLUIDO,
+        nota_id, descricao_nf,
+        detalhe=f"Contrato: {contrato.numero_contrato if contrato else nota.contrato_id}",
+    )
     db.delete(nota)
     db.flush()
     _sincronizar_resumo_nf_contrato(db, contrato)
@@ -1286,7 +1327,7 @@ def criar_faturamento_mensal_contrato(
     contrato_id: int,
     payload: schemas.NotaFiscalCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not contrato:
@@ -1319,7 +1360,7 @@ def criar_faturamento_mensal_contrato(
         contrato_id=contrato_id,
         payload=payload_mensal,
         db=db,
-        _auth=_auth,
+        current_user=current_user,
     )
 
 
@@ -1332,7 +1373,7 @@ def emitir_nota_fiscal_mensal_contrato(
     competencia: str,
     payload: schemas.EmitirNotaFiscalMensalRequest,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     competencia_ref = _parse_competencia_yyyy_mm(competencia)
 
@@ -1383,6 +1424,13 @@ def emitir_nota_fiscal_mensal_contrato(
         nota.observacoes = payload.observacoes
 
     _sincronizar_resumo_nf_contrato(db, contrato)
+    descricao_nf = nota.numero or f"NF #{nota.id} ({competencia})"
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_NOTAS_FISCAIS, audit.ACAO_EDITADO,
+        nota.id, descricao_nf,
+        detalhe=f"Contrato: {contrato.numero_contrato}, emitida status={nota.status}",
+    )
     db.commit()
     db.refresh(nota)
     return nota
@@ -1396,13 +1444,13 @@ def atualizar_faturamento_mensal(
     faturamento_id: int,
     payload: schemas.NotaFiscalUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     return atualizar_nota_fiscal(
         nota_id=faturamento_id,
         payload=payload,
         db=db,
-        _auth=_auth,
+        current_user=current_user,
     )
 
 
@@ -1410,7 +1458,7 @@ def atualizar_faturamento_mensal(
 def deletar_contrato(
     contrato_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_contrato = db.query(models.Contrato).filter(models.Contrato.id == contrato_id).first()
     if not db_contrato:
@@ -1419,9 +1467,15 @@ def deletar_contrato(
             detail=f"Contrato com ID {contrato_id} nao encontrado",
         )
 
+    numero = db_contrato.numero_contrato
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_CONTRATOS, audit.ACAO_EXCLUIDO,
+        contrato_id, numero,
+    )
     db.delete(db_contrato)
     db.commit()
     return {
-        "message": f"Contrato '{db_contrato.numero_contrato}' deletado com sucesso",
+        "message": f"Contrato '{numero}' deletado com sucesso",
         "success": True,
     }

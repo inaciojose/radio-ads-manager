@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import ROLE_ADMIN, get_current_user, hash_password, require_roles
 from app.database import get_db
+from app.services import audit_service as audit
 
 
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])
@@ -29,7 +30,11 @@ def listar_usuarios(
 
 
 @router.post("/", response_model=schemas.UsuarioResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles(ROLE_ADMIN))])
-def criar_usuario(payload: schemas.UsuarioCreate, db: Session = Depends(get_db)):
+def criar_usuario(
+    payload: schemas.UsuarioCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user),
+):
     existente = db.query(models.Usuario).filter(models.Usuario.username == payload.username).first()
     if existente:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username já cadastrado")
@@ -42,6 +47,13 @@ def criar_usuario(payload: schemas.UsuarioCreate, db: Session = Depends(get_db))
         ativo=payload.ativo,
     )
     db.add(db_user)
+    db.flush()
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_USUARIOS, audit.ACAO_CRIADO,
+        db_user.id, f"{db_user.nome} ({db_user.username})",
+        detalhe=f"role={db_user.role}",
+    )
     db.commit()
     db.refresh(db_user)
     return db_user
@@ -52,6 +64,7 @@ def atualizar_usuario(
     usuario_id: int,
     payload: schemas.UsuarioUpdate,
     db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user),
 ):
     db_user = db.query(models.Usuario).filter(models.Usuario.id == usuario_id).first()
     if not db_user:
@@ -88,6 +101,13 @@ def atualizar_usuario(
     for field, value in update_data.items():
         setattr(db_user, field, value)
 
+    campos_log = {k: v for k, v in update_data.items() if k != "password_hash"}
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_USUARIOS, audit.ACAO_EDITADO,
+        usuario_id, f"{db_user.nome} ({db_user.username})",
+        detalhe=", ".join(f"{k}={v}" for k, v in campos_log.items()) or None,
+    )
     db.commit()
     db.refresh(db_user)
     return db_user
@@ -119,6 +139,11 @@ def deletar_usuario(
         if total_admins == 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Não é possível remover o último admin ativo")
 
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_USUARIOS, audit.ACAO_EXCLUIDO,
+        db_user.id, f"{db_user.nome} ({db_user.username})",
+    )
     db.delete(db_user)
     db.commit()
     return {"message": "Usuário removido com sucesso", "success": True}

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
+from app.services import audit_service as audit
 
 router = APIRouter(prefix="/programas", tags=["Programas"])
 
@@ -42,7 +43,7 @@ def listar_programas(
 def criar_programa(
     payload: schemas.ProgramaCreate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     existente = (
         db.query(models.Programa)
@@ -57,6 +58,12 @@ def criar_programa(
 
     db_programa = models.Programa(**_serialize(payload))
     db.add(db_programa)
+    db.flush()
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_PROGRAMAS, audit.ACAO_CRIADO,
+        db_programa.id, db_programa.nome,
+    )
     db.commit()
     db.refresh(db_programa)
     return db_programa
@@ -67,7 +74,7 @@ def atualizar_programa(
     programa_id: int,
     payload: schemas.ProgramaUpdate,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_programa = db.query(models.Programa).filter(models.Programa.id == programa_id).first()
     if not db_programa:
@@ -89,6 +96,11 @@ def atualizar_programa(
     for field, value in data.items():
         setattr(db_programa, field, value)
 
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_PROGRAMAS, audit.ACAO_EDITADO,
+        db_programa.id, db_programa.nome,
+    )
     db.commit()
     db.refresh(db_programa)
     return db_programa
@@ -98,11 +110,16 @@ def atualizar_programa(
 def excluir_programa(
     programa_id: int,
     db: Session = Depends(get_db),
-    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+    current_user: models.Usuario = Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     db_programa = db.query(models.Programa).filter(models.Programa.id == programa_id).first()
     if not db_programa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Programa não encontrado")
 
+    audit.registrar(
+        db, current_user.id, current_user.nome,
+        audit.AREA_PROGRAMAS, audit.ACAO_EXCLUIDO,
+        programa_id, db_programa.nome,
+    )
     db.delete(db_programa)
     db.commit()

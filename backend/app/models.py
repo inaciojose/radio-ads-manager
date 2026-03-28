@@ -438,7 +438,6 @@ class CaixetaBloco(Base):
     id = Column(Integer, primary_key=True)
     caixeta_id = Column(Integer, ForeignKey("caixeta.id"), nullable=False)
     nome_programa = Column(String(200), nullable=False)
-    observacao = Column(Text, nullable=True)
     ordem = Column(Integer, default=0, nullable=False)
 
     caixeta = relationship("Caixeta", back_populates="blocos")
@@ -454,19 +453,63 @@ class CaixetaBloco(Base):
 
 
 class CaixetaHorario(Base):
-    """Horário e lista de comerciais dentro de um bloco."""
+    """Horário dentro de um bloco, com lista de comerciais."""
     __tablename__ = "caixeta_horario"
 
     id = Column(Integer, primary_key=True)
     bloco_id = Column(Integer, ForeignKey("caixeta_bloco.id"), nullable=False)
     horario = Column(String(10), nullable=False)  # "HH:MM"
-    comerciais = Column(Text, nullable=True)       # um por linha
     ordem = Column(Integer, default=0, nullable=False)
 
     bloco = relationship("CaixetaBloco", back_populates="horarios")
+    comerciais = relationship(
+        "CaixetaComercial",
+        back_populates="horario_item",
+        cascade="all, delete-orphan",
+        order_by="CaixetaComercial.ordem",
+    )
 
     def __repr__(self):
         return f"<CaixetaHorario(id={self.id}, horario={self.horario!r})>"
+
+
+class CaixetaComercial(Base):
+    """Comercial individual com observação própria, dentro de um horário."""
+    __tablename__ = "caixeta_comercial"
+
+    id = Column(Integer, primary_key=True)
+    horario_id = Column(Integer, ForeignKey("caixeta_horario.id"), nullable=False)
+    nome = Column(String(300), nullable=False)
+    observacao = Column(Text, nullable=True)
+    destaque = Column(Boolean, default=False, nullable=False)
+    ordem = Column(Integer, default=0, nullable=False)
+
+    horario_item = relationship("CaixetaHorario", back_populates="comerciais")
+
+    def __repr__(self):
+        return f"<CaixetaComercial(id={self.id}, nome={self.nome!r})>"
+
+
+# ============================================
+# MODELO: AuditLog
+# ============================================
+
+class AuditLog(Base):
+    """Registro imutável de ações realizadas no sistema."""
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True)
+    data_hora = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    usuario_id = Column(Integer, nullable=True, index=True)
+    usuario_nome = Column(String(120), nullable=True)
+    area = Column(String(50), nullable=False, index=True)
+    acao = Column(String(50), nullable=False, index=True)
+    registro_id = Column(String(100), nullable=True)
+    registro_descricao = Column(String(500), nullable=True)
+    detalhe = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<AuditLog(id={self.id}, area={self.area!r}, acao={self.acao!r})>"
 
 
 # ============================================

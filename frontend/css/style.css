@@ -1338,45 +1338,65 @@ body.sidebar-collapsed #api-status-text {
   padding: 0.25rem 0;
 }
 
-.caixeta-horario {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.4rem 1rem;
-  border-bottom: 1px solid #f0f0f0;
+/* Tabela de visualização */
+.caixeta-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
 }
 
-.caixeta-horario:last-child {
-  border-bottom: none;
+.caixeta-col-hora { width: 5rem; }
+.caixeta-col-obs  { width: 38%; }
+
+.caixeta-table thead th {
+  background: #eef0fb;
+  color: #2C3E7A;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.6rem;
+  border: 1.5px solid #9aa3d4;
+  text-align: left;
 }
 
-.caixeta-horario--atual {
-  background: #eef2ff;
+.caixeta-table tbody td {
+  padding: 0.35rem 0.6rem;
+  border: 1.5px solid #b0b8e0;
+  vertical-align: middle;
+}
+
+.caixeta-table tr.caixeta-horario--atual td {
+  background: #e8edff;
 }
 
 .caixeta-hora {
   font-weight: 700;
   color: #2C3E7A;
-  font-size: 0.9rem;
-  min-width: 3.5rem;
-  padding-top: 0.1rem;
-}
-
-.caixeta-comerciais {
-  margin: 0;
-  padding: 0;
-  list-style: disc;
-  padding-left: 1.1rem;
   font-size: 0.875rem;
-  color: #333;
+  text-align: center;
+  background: #f5f6ff;
+  white-space: nowrap;
 }
 
-.caixeta-obs {
-  font-size: 0.8rem;
+.caixeta-table tr.caixeta-horario--atual .caixeta-hora {
+  background: #d4dcff;
+}
+
+.caixeta-comercial-nome {
+  color: #1a1a2e;
+}
+
+.caixeta-comercial-obs {
   color: #666;
   font-style: italic;
-  padding: 0.4rem 1rem 0.6rem;
-  border-top: 1px dashed #e0e0e0;
+  font-size: 0.82rem;
+}
+
+.caixeta-sem-comerciais {
+  color: #bbb;
+  font-style: italic;
+  text-align: center;
 }
 
 /* Modo Edição */
@@ -1406,18 +1426,127 @@ body.sidebar-collapsed #api-status-text {
   white-space: nowrap;
 }
 
-.caixeta-edit-horarios {
+.caixeta-edit-horario-bloco {
+  background: #f8f9ff;
+  border: 1px solid #e8eaf0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.caixeta-edit-horario-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
-.caixeta-edit-horario-row {
+.caixeta-edit-comerciais-header {
   display: grid;
-  grid-template-columns: 8rem 1fr auto;
+  grid-template-columns: 1.5rem 1fr 1fr auto;
   gap: 0.5rem;
-  align-items: start;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0 0.1rem;
+}
+
+.caixeta-edit-col-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.caixeta-edit-comercial-row {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.caixeta-destaque-check {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: #2C3E7A;
+  margin-top: 0.15rem;
+  justify-self: center;
+}
+
+/* Destaque na visualização — sutil, apenas fundo levemente diferente */
+.caixeta-table tr.caixeta-comercial--destaque .caixeta-comercial-nome {
+  background: #f5f0e8;
+}
+
+.caixeta-table tr.caixeta-comercial--destaque.caixeta-horario--atual .caixeta-comercial-nome {
+  background: #e8e2d8;
 }
 
 .caixeta-time-input {
-  width: 100%;
+  width: 8rem;
+}
+
+/* ============================================
+   Audit Log
+   ============================================ */
+
+.audit-log-filtros {
+  background: #f8f9fb;
+  border: 1px solid #e0e4f0;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.audit-log-filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.audit-log-summary {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 0.5rem;
+}
+
+.audit-col-data {
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: #444;
+}
+
+.audit-area-badge {
+  display: inline-block;
+  background: #eef0fb;
+  color: #2C3E7A;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.audit-acao-badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #e8eaf6;
+  color: #333;
+}
+
+.audit-badge--criado    { background: #d4edda; color: #1a6b30; }
+.audit-badge--editado   { background: #fff3cd; color: #7a5500; }
+.audit-badge--excluido  { background: #f8d7da; color: #842029; }
+.audit-badge--inativado { background: #e2e3e5; color: #3a3b3c; }
+.audit-badge--cancelado { background: #fde8d8; color: #7a3000; }
+
+.audit-detalhe {
+  font-size: 0.78rem;
+  color: #666;
+  font-style: italic;
 }
