@@ -147,7 +147,7 @@ class API {
         ...options.headers,
       },
     }
-    if (options.body && !config.headers["Content-Type"]) {
+    if (options.body && !(options.body instanceof FormData) && !config.headers["Content-Type"]) {
       config.headers["Content-Type"] = "application/json"
     }
     if (this.token) {
@@ -440,6 +440,15 @@ class API {
   async getNotasFiscais(params = {}) {
     const query = new URLSearchParams(params).toString()
     return this.request(`/notas-fiscais/${query ? "?" + query : ""}`)
+  }
+
+  async importarPdfNF(file) {
+    const formData = new FormData()
+    formData.append("arquivo", file)
+    return this.request("/notas-fiscais/importar-pdf", {
+      method: "POST",
+      body: formData,
+    })
   }
 
   async deleteContrato(id) {

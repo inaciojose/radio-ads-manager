@@ -1550,3 +1550,30 @@ body.sidebar-collapsed #api-status-text {
   color: #666;
   font-style: italic;
 }
+
+/* ============================================
+   Importar NF via PDF
+   ============================================ */
+
+.nf-pdf-import {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e8eaf0;
+}
+
+.nf-pdf-status {
+  font-size: 0.82rem;
+}
+.nf-pdf-status--loading { color: #555; font-style: italic; }
+.nf-pdf-status--ok      { color: #1a6b30; }
+.nf-pdf-status--warn    { color: #7a5500; }
+.nf-pdf-status--error   { color: #842029; }
+
+.auto-preenchido {
+  background-color: #fffbe6 !important;
+  border-color: #f0c040 !important;
+  transition: background-color 0.3s ease;
+}

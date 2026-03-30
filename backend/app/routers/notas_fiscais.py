@@ -1,10 +1,11 @@
 """routers/notas_fiscais.py - Visao global de notas fiscais."""
 
+import re
 from datetime import date
 from io import BytesIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -315,3 +316,135 @@ def listar_notas_fiscais(
         "skip": skip,
         "limit": limit,
     }
+
+
+# ---------------------------------------------------------------------------
+# Importar NF via PDF
+# ---------------------------------------------------------------------------
+
+def _extrair_valor(texto: str, *patterns: str) -> Optional[float]:
+    """Tenta extrair um valor monetário usando os padrões fornecidos."""
+    for pat in patterns:
+        m = re.search(pat, texto, re.IGNORECASE)
+        if m:
+            raw = m.group(1).strip()
+            # Remove separadores de milhar e troca vírgula por ponto
+            raw = raw.replace(".", "").replace(",", ".")
+            try:
+                return float(raw)
+            except ValueError:
+                continue
+    return None
+
+
+def _limpar_cnpj(cnpj: str) -> str:
+    """Retorna apenas os dígitos do CNPJ."""
+    return re.sub(r"\D", "", cnpj)
+
+
+def _parsear_pdf_nfcom(texto: str) -> dict:
+    """Extrai campos de uma NFCom a partir do texto bruto do PDF."""
+    resultado: dict = {}
+
+    # Número da NF: após 'NOTA FISCAL FATURA No.' ou 'No.'
+    m = re.search(r"NOTA FISCAL FATURA\s*N[Oo°]\.?\s*(\d+)", texto)
+    if m:
+        resultado["numero"] = m.group(1).lstrip("0") or m.group(1)
+
+    # Data de emissão: DD/MM/YYYY após 'DATA DE EMISSÃO'
+    m = re.search(r"DATA DE EMISS[ÃA]O[:\s]*(\d{2}/\d{2}/\d{4})", texto)
+    if m:
+        d, mo, y = m.group(1).split("/")
+        resultado["data_emissao"] = f"{y}-{mo}-{d}"
+
+    # Competência: YYYY/MM após 'REFERÊNCIA (ANO/MÊS)'
+    m = re.search(r"REFER[EÊ]NCIA\s*\(ANO/M[EÊ]S\)[:\s]*(\d{4})/(\d{2})", texto)
+    if m:
+        resultado["competencia"] = f"{m.group(1)}-{m.group(2)}"
+
+    # Valor: várias formas possíveis no layout da NFCom
+    valor = _extrair_valor(
+        texto,
+        r"TOTAL\s+A\s+PAGAR[:\s]*R\$\s*([\d.,]+)",
+        r"VALOR\s+TOTAL\s+NFF\s+R\$\s*([\d.,]+)",
+        r"VALOR\s+TOTAL\s+DA\s+NOTA\s+R\$\s*([\d.,]+)",
+        r"TOTAL\s+R\$\s*([\d.,]+)",
+    )
+    if valor is not None:
+        resultado["valor_bruto"] = valor
+
+    # CNPJ do tomador: extrai o valor que vem após o rótulo 'CNPJ/CPF:',
+    # exclusivo do bloco do tomador (evita pegar o CNPJ do emitente no cabeçalho)
+    m = re.search(r"CNPJ/CPF[:\s]+(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})", texto)
+    if m:
+        resultado["cnpj_tomador"] = m.group(1)
+
+    # Nome do tomador: bloco após 'TOMADOR' ou 'DESTINATÁRIO'
+    m = re.search(
+        r"(?:TOMADOR|DESTINAT[AÁ]RIO)[^\n]*\n\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^\n]{3,80})",
+        texto,
+        re.IGNORECASE,
+    )
+    if m:
+        resultado["nome_tomador"] = m.group(1).strip()
+
+    return resultado
+
+
+@router.post("/importar-pdf", response_model=schemas.ImportarNFPdfResponse)
+def importar_pdf_nf(
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
+):
+    """Extrai campos de uma NFCom em PDF e tenta identificar o cliente pelo CNPJ."""
+    if not arquivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
+
+    try:
+        import pdfplumber
+    except ImportError:
+        raise HTTPException(status_code=500, detail="pdfplumber não instalado no servidor.")
+
+    conteudo = arquivo.file.read()
+    from io import BytesIO as _BytesIO
+
+    texto = ""
+    try:
+        with pdfplumber.open(_BytesIO(conteudo)) as pdf:
+            for pagina in pdf.pages:
+                texto += (pagina.extract_text() or "") + "\n"
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Não foi possível ler o PDF: {exc}")
+
+    dados = _parsear_pdf_nfcom(texto)
+
+    # Identifica cliente pelo CNPJ
+    cliente_id = None
+    cliente_nome = None
+    if dados.get("cnpj_tomador"):
+        cnpj_digits = _limpar_cnpj(dados["cnpj_tomador"])
+        cliente = (
+            db.query(models.Cliente)
+            .filter(models.Cliente.cnpj_cpf.isnot(None))
+            .all()
+        )
+        for c in cliente:
+            if _limpar_cnpj(c.cnpj_cpf or "") == cnpj_digits:
+                cliente_id = c.id
+                cliente_nome = c.nome
+                break
+
+    campos_preenchidos = [k for k in ("numero", "data_emissao", "competencia", "valor_bruto") if k in dados]
+
+    return schemas.ImportarNFPdfResponse(
+        numero=dados.get("numero"),
+        data_emissao=dados.get("data_emissao"),
+        competencia=dados.get("competencia"),
+        valor_bruto=dados.get("valor_bruto"),
+        cnpj_tomador=dados.get("cnpj_tomador"),
+        nome_tomador=dados.get("nome_tomador"),
+        cliente_id=cliente_id,
+        cliente_nome=cliente_nome,
+        campos_preenchidos=campos_preenchidos,
+    )

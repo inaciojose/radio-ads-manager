@@ -1275,6 +1275,13 @@
           <form id="form-nota-fiscal">
             <input type="hidden" id="nf-contrato-id" />
             <input type="hidden" id="nf-nota-id" />
+            <div class="nf-pdf-import">
+              <input type="file" id="nf-pdf-input" accept=".pdf" style="display:none" onchange="processarPdfNF(this)" />
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('nf-pdf-input').click()">
+                <i class="fas fa-file-pdf"></i> Importar PDF
+              </button>
+              <span id="nf-pdf-status" class="nf-pdf-status" style="display:none"></span>
+            </div>
             <div class="form-group">
               <label>Status NF *</label>
               <select id="nf-status" required>
@@ -1373,6 +1380,13 @@
 
           <!-- Aba: Emitir / Registrar -->
           <div class="nf-tab-panel active" id="faturamento-tab-nova">
+            <div class="nf-pdf-import">
+              <input type="file" id="fat-pdf-input" accept=".pdf" style="display:none" onchange="processarPdfFaturamento(this)" />
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fat-pdf-input').click()">
+                <i class="fas fa-file-pdf"></i> Importar PDF
+              </button>
+              <span id="fat-pdf-status" class="nf-pdf-status" style="display:none"></span>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label>Competência</label>

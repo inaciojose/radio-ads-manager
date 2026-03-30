@@ -941,6 +941,11 @@ async function showNotaFiscalModal(id) {
     ? (notas.find((n) => n.status !== "cancelada") ?? null)
     : null
 
+  // Limpa estado do importador PDF ao abrir o modal
+  const _pdfStatus = document.getElementById("nf-pdf-status")
+  if (_pdfStatus) { _pdfStatus.style.display = "none"; _pdfStatus.textContent = "" }
+  document.querySelectorAll("#form-nota-fiscal .auto-preenchido").forEach((el) => el.classList.remove("auto-preenchido"))
+
   document.getElementById("nf-contrato-id").value = contrato.id
   document.getElementById("nf-nota-id").value = nota?.id || ""
   document.getElementById("nf-status").value = nota?.status || "pendente"
@@ -1016,6 +1021,107 @@ async function saveNotaFiscal() {
   } finally {
     hideLoading()
   }
+}
+
+async function processarPdfNF(input) {
+  const file = input.files[0]
+  if (!file) return
+
+  const statusEl = document.getElementById("nf-pdf-status")
+  statusEl.textContent = "Extraindo dados do PDF…"
+  statusEl.className = "nf-pdf-status nf-pdf-status--loading"
+  statusEl.style.display = "inline"
+
+  try {
+    const dados = await api.importarPdfNF(file)
+    _preencherCamposNF(dados)
+
+    const n = dados.campos_preenchidos.length
+    if (n === 0) {
+      statusEl.textContent = "Nenhum dado encontrado no PDF."
+      statusEl.className = "nf-pdf-status nf-pdf-status--warn"
+    } else if (!dados.cliente_id) {
+      statusEl.textContent = `${n} campo(s) preenchido(s). Cliente não identificado pelo CNPJ (${dados.cnpj_tomador || "não encontrado"}).`
+      statusEl.className = "nf-pdf-status nf-pdf-status--warn"
+    } else {
+      statusEl.textContent = `${n} campo(s) preenchido(s). Cliente: ${dados.cliente_nome}.`
+      statusEl.className = "nf-pdf-status nf-pdf-status--ok"
+    }
+  } catch (e) {
+    statusEl.textContent = e.message || "Erro ao processar o PDF."
+    statusEl.className = "nf-pdf-status nf-pdf-status--error"
+  }
+
+  input.value = ""
+}
+
+function _preencherCamposNF(dados) {
+  const CLS = "auto-preenchido"
+  document.querySelectorAll(`#form-nota-fiscal .${CLS}`).forEach((el) => el.classList.remove(CLS))
+
+  const set = (id, valor) => {
+    if (valor === null || valor === undefined) return
+    const el = document.getElementById(id)
+    if (!el) return
+    el.value = valor
+    el.classList.add(CLS)
+  }
+
+  set("nf-numero", dados.numero)
+  set("nf-data-emissao", dados.data_emissao)      // YYYY-MM-DD
+  set("nf-competencia", dados.competencia)         // YYYY-MM (month-picker select)
+  if (dados.valor_bruto !== null && dados.valor_bruto !== undefined) {
+    set("nf-valor-bruto", dados.valor_bruto)
+  }
+}
+
+async function processarPdfFaturamento(input) {
+  const file = input.files[0]
+  if (!file) return
+
+  const statusEl = document.getElementById("fat-pdf-status")
+  statusEl.textContent = "Extraindo dados do PDF…"
+  statusEl.className = "nf-pdf-status nf-pdf-status--loading"
+  statusEl.style.display = "inline"
+
+  try {
+    const dados = await api.importarPdfNF(file)
+
+    const CLS = "auto-preenchido"
+    document.querySelectorAll(`#faturamento-tab-nova .${CLS}`).forEach((el) => el.classList.remove(CLS))
+
+    const set = (id, valor) => {
+      if (valor === null || valor === undefined) return
+      const el = document.getElementById(id)
+      if (!el) return
+      el.value = valor
+      el.classList.add(CLS)
+    }
+
+    set("faturamento-numero-nf", dados.numero)
+    set("faturamento-data-emissao", dados.data_emissao)
+    set("faturamento-competencia", dados.competencia)
+    if (dados.valor_bruto !== null && dados.valor_bruto !== undefined) {
+      set("faturamento-valor-bruto", dados.valor_bruto)
+    }
+
+    const n = dados.campos_preenchidos.length
+    if (n === 0) {
+      statusEl.textContent = "Nenhum dado encontrado no PDF."
+      statusEl.className = "nf-pdf-status nf-pdf-status--warn"
+    } else if (!dados.cliente_id) {
+      statusEl.textContent = `${n} campo(s) preenchido(s). Cliente não identificado pelo CNPJ (${dados.cnpj_tomador || "não encontrado"}).`
+      statusEl.className = "nf-pdf-status nf-pdf-status--warn"
+    } else {
+      statusEl.textContent = `${n} campo(s) preenchido(s). Cliente: ${dados.cliente_nome}.`
+      statusEl.className = "nf-pdf-status nf-pdf-status--ok"
+    }
+  } catch (e) {
+    statusEl.textContent = e.message || "Erro ao processar o PDF."
+    statusEl.className = "nf-pdf-status nf-pdf-status--error"
+  }
+
+  input.value = ""
 }
 
 async function removerContrato(id) {
@@ -1117,6 +1223,10 @@ async function showFaturamentoMensalModal(contratoId) {
   document.getElementById("faturamento-forma-pagamento").value = ""
   document.getElementById("faturamento-campanha-agentes").value = ""
   document.getElementById("faturamento-observacoes").value = ""
+
+  const _fatPdfStatus = document.getElementById("fat-pdf-status")
+  if (_fatPdfStatus) { _fatPdfStatus.style.display = "none"; _fatPdfStatus.textContent = "" }
+  document.querySelectorAll("#faturamento-tab-nova .auto-preenchido").forEach((el) => el.classList.remove("auto-preenchido"))
 
   switchFaturamentoTab("nova")
   openModal("modal-faturamento-mensal")

@@ -902,6 +902,21 @@ class AuditLogListResponse(BaseModel):
 
 
 # ============================================
+# SCHEMAS: Importar NF via PDF
+# ============================================
+
+class ImportarNFPdfResponse(BaseModel):
+    numero: Optional[str] = None
+    data_emissao: Optional[str] = None      # YYYY-MM-DD
+    competencia: Optional[str] = None       # YYYY-MM
+    valor_bruto: Optional[float] = None
+    cnpj_tomador: Optional[str] = None
+    nome_tomador: Optional[str] = None
+    cliente_id: Optional[int] = None
+    cliente_nome: Optional[str] = None
+    campos_preenchidos: List[str] = []
+
+
 # SCHEMAS: Respostas Padrão
 # ============================================
 
