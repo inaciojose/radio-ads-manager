@@ -61,13 +61,9 @@ def _build_query(
 def _row(item: models.AuditLog) -> list:
     dt = item.data_hora
     if dt and dt.tzinfo:
-        from datetime import timezone as tz
-        import pytz
-        try:
-            dt_local = dt.astimezone(pytz.timezone("America/Fortaleza"))
-            dt_str = dt_local.strftime("%d/%m/%Y %H:%M:%S")
-        except Exception:
-            dt_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+        from zoneinfo import ZoneInfo
+        dt_local = dt.astimezone(ZoneInfo("America/Fortaleza"))
+        dt_str = dt_local.strftime("%d/%m/%Y %H:%M:%S")
     elif dt:
         dt_str = dt.strftime("%d/%m/%Y %H:%M:%S")
     else:
