@@ -550,11 +550,19 @@ class LogMonitor:
             return
 
         batch_size = max(1, self.config.INGEST_BATCH_SIZE)
+        novas = 0
         for i in range(0, len(payload), batch_size):
             chunk = payload[i:i + batch_size]
             resultado = self.api_client.create_veiculacoes_batch(chunk)
-            self.veiculacoes_criadas += resultado.get("criadas", 0)
+            criadas = resultado.get("criadas", 0)
+            self.veiculacoes_criadas += criadas
+            novas += criadas
             self.erros += resultado.get("falhas", 0)
+
+        # Se criou veiculações novas, processa imediatamente sem esperar o intervalo
+        if novas > 0:
+            logger.info(f"{novas} veiculação(ões) nova(s) — disparando processamento imediato.")
+            self.process_pending_veiculacoes()
     
     def process_pending_veiculacoes(self):
         """
@@ -643,14 +651,29 @@ class LogMonitor:
         logger.info("Iniciando em modo WATCH (monitoramento em tempo real)")
         logger.info(f"Monitorando: {self.log_sources}")
         logger.info("Pressione Ctrl+C para parar")
-        
+
         # Verificar se API está online
         if not self.api_client.check_health():
             logger.error("API não está respondendo! Certifique-se de que está rodando.")
             return
-        
+
         logger.info("API online ✓")
-        
+
+        # Scan inicial: processa arquivo de hoje de cada fonte antes de iniciar o watch,
+        # para capturar veiculações que já existiam quando o monitor foi iniciado.
+        hoje = datetime.now()
+        nome_hoje = hoje.strftime("%Y-%m-%d.log")
+        for frequencia, log_dir_raw in self.log_sources:
+            log_path = Path(log_dir_raw) / nome_hoje
+            if log_path.exists():
+                logger.info(f"[scan inicial] Processando {log_path} ({frequencia})")
+                self.process_log_file(str(log_path), hoje, frequencia, incremental=False)
+            else:
+                logger.info(f"[scan inicial] Arquivo de hoje não encontrado: {log_path}")
+
+        # Processa logo após o scan inicial (não esperar 5 minutos)
+        self.process_pending_veiculacoes()
+
         # Configurar watchdog
         observer = Observer()
         for frequencia, log_dir_raw in self.log_sources:
