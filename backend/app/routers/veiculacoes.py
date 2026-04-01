@@ -281,30 +281,6 @@ def exportar_veiculacoes_pdf(
 # ENDPOINT: Buscar veiculação específica
 # ============================================
 
-@router.get("/{veiculacao_id}", response_model=schemas.VeiculacaoResponse)
-def buscar_veiculacao(
-    veiculacao_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Busca uma veiculação específica pelo ID.
-    
-    Exemplo:
-    GET /veiculacoes/1
-    """
-    veiculacao = db.query(models.Veiculacao).filter(
-        models.Veiculacao.id == veiculacao_id
-    ).first()
-    
-    if not veiculacao:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Veiculação com ID {veiculacao_id} não encontrada"
-        )
-    
-    return veiculacao
-
-
 # ============================================
 # ENDPOINT: Criar veiculação manualmente
 # ============================================
@@ -835,3 +811,27 @@ def listar_nao_contabilizadas(
         )
 
     return result
+
+
+# ============================================
+# ENDPOINT: Buscar veiculação por ID
+# (deve ficar após todas as rotas com segmento fixo para não capturá-las)
+# ============================================
+
+@router.get("/{veiculacao_id}", response_model=schemas.VeiculacaoResponse)
+def buscar_veiculacao(
+    veiculacao_id: int,
+    db: Session = Depends(get_db)
+):
+    """Busca uma veiculação específica pelo ID."""
+    veiculacao = db.query(models.Veiculacao).filter(
+        models.Veiculacao.id == veiculacao_id
+    ).first()
+
+    if not veiculacao:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Veiculação com ID {veiculacao_id} não encontrada"
+        )
+
+    return veiculacao
