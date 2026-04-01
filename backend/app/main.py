@@ -11,14 +11,93 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
+import subprocess
+import sys
+import threading
+import time
 import uuid
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 
 from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings
 from app.routers import arquivos, audit_log, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 from app.services.audit_service import limpar_logs_antigos
+
+
+# ============================================
+# MONITOR DE LOGS — Subprocesso gerenciado
+# ============================================
+
+_monitor_process: Optional[subprocess.Popen] = None
+_monitor_stop_event = threading.Event()
+_monitor_watchdog_thread: Optional[threading.Thread] = None
+
+
+def _monitor_script_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "log_monitor" / "monitor.py"
+
+
+def _log_sources_acessiveis() -> bool:
+    """Retorna True se ao menos um diretório de LOG_SOURCES existir."""
+    raw = os.getenv("LOG_SOURCES", "")
+    for chunk in raw.split(";"):
+        if "=" not in chunk:
+            continue
+        _, path = chunk.split("=", 1)
+        if Path(path.strip()).exists():
+            return True
+    return False
+
+
+def _pipe_reader(proc: subprocess.Popen):
+    """Lê stdout do subprocesso e repassa ao print (capturado pelo uvicorn)."""
+    try:
+        for line in proc.stdout:
+            print(f"[monitor] {line.rstrip()}", flush=True)
+    except Exception:
+        pass
+
+
+def _start_monitor() -> Optional[subprocess.Popen]:
+    script = _monitor_script_path()
+    if not script.exists():
+        print("⚠️  Monitor de logs não encontrado em:", script)
+        return None
+
+    if not os.getenv("MONITOR_API_KEY") and not os.getenv("API_TOKEN"):
+        print("⚠️  Monitor de logs não iniciado — configure MONITOR_API_KEY no .env")
+        return None
+
+    if not _log_sources_acessiveis():
+        print("⚠️  Monitor de logs não iniciado — nenhum diretório de LOG_SOURCES acessível")
+        return None
+
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(script), "watch"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        threading.Thread(target=_pipe_reader, args=(proc,), daemon=True).start()
+        return proc
+    except Exception as exc:
+        print(f"⚠️  Falha ao iniciar monitor de logs: {exc}")
+        return None
+
+
+def _monitor_watchdog_fn():
+    """Reinicia o monitor se o processo morrer."""
+    global _monitor_process
+    while not _monitor_stop_event.wait(timeout=30):
+        if _monitor_process and _monitor_process.poll() is not None:
+            print("⚠️  Monitor de logs encerrou inesperadamente — reiniciando...")
+            _monitor_process = _start_monitor()
+            if _monitor_process:
+                print(f"🔍 Monitor de logs reiniciado (PID {_monitor_process.pid})")
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -79,11 +158,28 @@ async def lifespan(app: FastAPI):
     
     print("✅ Aplicação pronta!")
     print("📖 Documentação: http://localhost:8000/docs")
-    
+
+    # Iniciar monitor de logs como subprocesso
+    global _monitor_process, _monitor_watchdog_thread
+    _monitor_stop_event.clear()
+    _monitor_process = _start_monitor()
+    if _monitor_process:
+        print(f"🔍 Monitor de logs iniciado (PID {_monitor_process.pid})")
+        _monitor_watchdog_thread = threading.Thread(target=_monitor_watchdog_fn, daemon=True)
+        _monitor_watchdog_thread.start()
+
     yield  # Aqui a aplicação roda normalmente
-    
+
     # SHUTDOWN
     print("👋 Encerrando aplicação...")
+    _monitor_stop_event.set()
+    if _monitor_process and _monitor_process.poll() is None:
+        _monitor_process.terminate()
+        try:
+            _monitor_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _monitor_process.kill()
+        print("🛑 Monitor de logs encerrado")
 
 
 # ============================================
