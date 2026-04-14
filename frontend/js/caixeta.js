@@ -147,6 +147,19 @@ function _renderCaixetaView(data) {
       </div>`
     })
     .join("")
+
+  // Scroll automático para o horário atual ao carregar/recarregar
+  requestAnimationFrame(() => centralizarHorarioAtual(false))
+}
+
+function centralizarHorarioAtual(smooth = true) {
+  const alvo =
+    document.querySelector(".caixeta-horario--atual") ||
+    document.querySelector(".caixeta-bloco--atual")
+  if (!alvo) return
+  const rect = alvo.getBoundingClientRect()
+  const offset = rect.top + window.scrollY - window.innerHeight * 0.30
+  window.scrollTo({ top: offset, behavior: smooth ? "smooth" : "instant" })
 }
 
 // ============================================

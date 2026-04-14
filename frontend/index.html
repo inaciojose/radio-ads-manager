@@ -791,6 +791,9 @@
               <button id="btn-caixeta-sabado" class="btn btn-secondary" onclick="switchCaixetaTipo('sabado')">
                 <i class="fas fa-calendar-day"></i> Grade Sábado
               </button>
+              <button class="btn btn-secondary" onclick="centralizarHorarioAtual()">
+                <i class="fas fa-crosshairs"></i> Centralizar
+              </button>
               <button class="btn btn-primary" onclick="baixarCaixetaPdf()">
                 <i class="fas fa-file-pdf"></i> Baixar PDF
               </button>
@@ -913,6 +916,17 @@
 
       </div>
     </div>
+
+    <!-- Botão flutuante: centralizar horário atual na Caixeta -->
+    <button
+      id="btn-centralizar-flutuante"
+      class="btn-centralizar-flutuante"
+      onclick="centralizarHorarioAtual()"
+      title="Centralizar horário atual"
+      style="display: none"
+    >
+      <i class="fas fa-crosshairs"></i>
+    </button>
 
     <!-- Modals -->
     <div

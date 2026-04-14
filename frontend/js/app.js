@@ -299,6 +299,10 @@ function showPage(pageName, evt) {
   })
   document.getElementById(`page-${pageName}`).classList.add("active")
 
+  // Botão flutuante da caixeta — só visível na página de caixeta
+  const btnFlutuante = document.getElementById("btn-centralizar-flutuante")
+  if (btnFlutuante) btnFlutuante.style.display = pageName === "caixeta" ? "flex" : "none"
+
   // Carregar dados da página
   loadPageData(pageName)
   restartPolling()

@@ -1325,7 +1325,7 @@ body.sidebar-collapsed #api-status-text {
 
 .caixeta-programa {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   color: #1a1a2e;
 }
 
@@ -1342,26 +1342,26 @@ body.sidebar-collapsed #api-status-text {
 .caixeta-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
-.caixeta-col-hora { width: 5rem; }
-.caixeta-col-obs  { width: 38%; }
+.caixeta-col-hora { width: 5.5rem; }
+.caixeta-col-obs  { width: 36%; }
 
 .caixeta-table thead th {
   background: #eef0fb;
   color: #2C3E7A;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.3rem 0.6rem;
+  padding: 0.35rem 0.75rem;
   border: 1.5px solid #9aa3d4;
   text-align: left;
 }
 
 .caixeta-table tbody td {
-  padding: 0.35rem 0.6rem;
+  padding: 0.45rem 0.75rem;
   border: 1.5px solid #b0b8e0;
   vertical-align: middle;
 }
@@ -1373,7 +1373,7 @@ body.sidebar-collapsed #api-status-text {
 .caixeta-hora {
   font-weight: 700;
   color: #2C3E7A;
-  font-size: 0.875rem;
+  font-size: 1.4rem;
   text-align: center;
   background: #f5f6ff;
   white-space: nowrap;
@@ -1385,12 +1385,14 @@ body.sidebar-collapsed #api-status-text {
 
 .caixeta-comercial-nome {
   color: #1a1a2e;
+  font-size: 1.3rem;
+  font-weight: 500;
 }
 
 .caixeta-comercial-obs {
   color: #666;
   font-style: italic;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .caixeta-sem-comerciais {
@@ -1576,4 +1578,33 @@ body.sidebar-collapsed #api-status-text {
   background-color: #fffbe6 !important;
   border-color: #f0c040 !important;
   transition: background-color 0.3s ease;
+}
+
+/* ============================================
+   Botão flutuante — Centralizar horário (Caixeta)
+   ============================================ */
+
+.btn-centralizar-flutuante {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 900;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #2C3E7A;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  transition: background 0.15s, transform 0.15s;
+}
+
+.btn-centralizar-flutuante:hover {
+  background: #1e2d5c;
+  transform: scale(1.08);
 }
