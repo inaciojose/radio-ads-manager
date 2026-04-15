@@ -15,6 +15,7 @@ COMO FUNCIONA:
 """
 
 import os
+import json
 import time
 import re
 import unicodedata
@@ -87,6 +88,10 @@ class Config:
     # Fuso horário local dos logs (os horários nos arquivos .log são horário local).
     # Deve corresponder à timezone do servidor de rádio.
     LOG_TIMEZONE = os.getenv("LOG_TIMEZONE", "America/Fortaleza")
+
+    # Arquivo de persistência dos offsets de leitura dos logs.
+    # Permite retomar do ponto onde parou após um restart, evitando duplicatas.
+    OFFSETS_FILE = os.getenv("MONITOR_OFFSETS_FILE", "/tmp/radio_ads_monitor_offsets.json")
 
     def parse_log_sources(self) -> List[Tuple[str, str]]:
         sources: List[Tuple[str, str]] = []
@@ -314,6 +319,32 @@ class LogMonitor:
         self._codigo_para_cliente_cache: Dict[int, Optional[int]] = {}  # código → cliente_id ou None
         self._file_offsets: Dict[Tuple[str, str], int] = {}
         self._pending_events: Dict[Tuple[str, str], Dict] = {}
+        self._load_offsets()
+
+    def _load_offsets(self):
+        """Carrega offsets persistidos do disco (sobrevive a restarts)."""
+        try:
+            with open(self.config.OFFSETS_FILE, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            # chave no JSON: "frequencia||filepath"
+            for k, v in raw.items():
+                partes = k.split("||", 1)
+                if len(partes) == 2:
+                    self._file_offsets[(partes[0], partes[1])] = int(v)
+            logger.info(f"Offsets carregados: {len(self._file_offsets)} arquivo(s)")
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logger.warning(f"Não foi possível carregar offsets: {e}")
+
+    def _save_offsets(self):
+        """Persiste offsets atuais no disco."""
+        try:
+            raw = {f"{k[0]}||{k[1]}": v for k, v in self._file_offsets.items()}
+            with open(self.config.OFFSETS_FILE, "w", encoding="utf-8") as f:
+                json.dump(raw, f)
+        except Exception as e:
+            logger.warning(f"Não foi possível salvar offsets: {e}")
 
     def _resolver_cliente(self, codigo: int) -> Optional[int]:
         """
@@ -352,6 +383,8 @@ class LogMonitor:
             logger.error(f"Erro ao ler arquivo {filepath}: {e}")
             self.erros += 1
             return
+
+        self._save_offsets()
 
         logger.info(f"Propagandas detectadas: {len(propagandas)}")
         if not propagandas:
@@ -458,7 +491,9 @@ class LogMonitor:
             log_path = Path(log_dir_raw) / nome_hoje
             if log_path.exists():
                 logger.info(f"[scan inicial] {log_path} ({frequencia})")
-                self.process_log_file(str(log_path), hoje, frequencia, incremental=False)
+                # incremental=True: se há offset salvo em disco, processa apenas conteúdo novo.
+                # Se não há offset (primeiro run), start_offset=0 processa o arquivo completo.
+                self.process_log_file(str(log_path), hoje, frequencia, incremental=True)
             else:
                 logger.info(f"[scan inicial] Arquivo de hoje não encontrado: {log_path}")
 
