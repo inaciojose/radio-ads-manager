@@ -149,7 +149,7 @@ class ZaraLogParser:
         if not self.log_pattern.match(hora_str):
             return None
 
-        if action not in {"inicio", "in"}:
+        if action not in {"inicio", "in", "start"}:
             return None
 
         if not self.is_chamada(caminho_tocado):
@@ -173,12 +173,20 @@ class ZaraLogParser:
         }
 
     def is_chamada(self, caminho_arquivo: str) -> bool:
-        """Arquivo está dentro de CHAMADAS_BASE_PATH."""
+        """Arquivo está dentro de CHAMADAS_BASE_PATH.
+        Suporta tanto caminhos de unidade (J:\\...) quanto caminhos UNC (\\\\?\\UNC\\...).
+        """
         caminho_normalizado = self._normalizar_path(caminho_arquivo)
         base_normalizada = self._normalizar_path(self.config.CHAMADAS_BASE_PATH)
         if not base_normalizada.endswith("\\"):
             base_normalizada = f"{base_normalizada}\\"
-        return caminho_normalizado.startswith(base_normalizada)
+        # Correspondência direta (ex.: J:\AZARASTUDIO\CHAMADAS\)
+        if caminho_normalizado.startswith(base_normalizada):
+            return True
+        # Correspondência via caminho UNC (ex.: \\?\UNC\server\share\AZARASTUDIO\CHAMADAS\)
+        # Remove o prefixo de unidade (ex.: "j:") e verifica como subcaminho
+        tail = base_normalizada.split("\\", 1)[-1]  # "azarastudio\chamadas\"
+        return tail in caminho_normalizado
 
     @staticmethod
     def _extrair_codigo(nome_arquivo: str) -> Optional[int]:
