@@ -921,6 +921,76 @@
           </div>
         </div>
 
+        <!-- Página: Backup -->
+        <div id="page-backup" class="page">
+          <div class="page-header">
+            <h2 style="margin:0;font-size:1.1rem;">Backup do Banco de Dados</h2>
+            <div class="page-actions">
+              <button class="btn btn-primary" onclick="backupExecutarAgora()">
+                <i class="fas fa-download"></i> Fazer Backup Agora
+              </button>
+            </div>
+          </div>
+
+          <!-- Configurações -->
+          <div class="card" style="margin-bottom:1rem">
+            <h3 style="margin-top:0">Configurações</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="form-group">
+                <label>Pasta de destino dos backups</label>
+                <input type="text" id="backup-dir" class="form-control" placeholder="/caminho/para/pasta/backups" />
+                <small style="color:var(--text-muted,#888)">Pode ser um caminho local, disco externo ou pasta de rede montada.</small>
+              </div>
+              <div class="form-group">
+                <label>Dias de retenção</label>
+                <input type="number" id="backup-keep-dias" class="form-control" min="1" max="365" value="30" />
+                <small style="color:var(--text-muted,#888)">Backups mais antigos que este limite são removidos automaticamente.</small>
+              </div>
+              <div class="form-group">
+                <label>Container Docker do PostgreSQL</label>
+                <input type="text" id="backup-container" class="form-control" placeholder="postgres-radio" />
+                <small style="color:var(--text-muted,#888)">Nome do container (docker ps). Deixe em branco para usar pg_dump local.</small>
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <div>
+                  <p style="margin:0 0 0.25rem;font-size:0.85rem;color:var(--text-muted,#888)">Agendamento automático</p>
+                  <p id="backup-cron" style="margin:0;font-weight:500">—</p>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+              <button class="btn btn-primary" onclick="backupSalvarConfig()">
+                <i class="fas fa-save"></i> Salvar Configurações
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de backups -->
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+              <h3 style="margin:0">Backups Disponíveis</h3>
+              <button class="btn btn-secondary btn-sm" onclick="backupCarregarLista()">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table" id="table-backups">
+                <thead>
+                  <tr>
+                    <th>Arquivo</th>
+                    <th>Tamanho</th>
+                    <th>Data de criação</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="4" class="text-center">Carregando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1762,76 +1832,6 @@
           <button class="btn btn-primary" onclick="_relatorioExportarAtual()">
             <i class="fas fa-download"></i> Exportar
           </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Página: Backup -->
-    <div id="page-backup" class="page">
-      <div class="page-header">
-        <h2 style="margin:0;font-size:1.1rem;">Backup do Banco de Dados</h2>
-        <div class="page-actions">
-          <button class="btn btn-primary" onclick="backupExecutarAgora()">
-            <i class="fas fa-download"></i> Fazer Backup Agora
-          </button>
-        </div>
-      </div>
-
-      <!-- Configurações -->
-      <div class="card" style="margin-bottom:1rem">
-        <h3 style="margin-top:0">Configurações</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-          <div class="form-group">
-            <label>Pasta de destino dos backups</label>
-            <input type="text" id="backup-dir" class="form-control" placeholder="/caminho/para/pasta/backups" />
-            <small style="color:var(--text-muted,#888)">Pode ser um caminho local, disco externo ou pasta de rede montada.</small>
-          </div>
-          <div class="form-group">
-            <label>Dias de retenção</label>
-            <input type="number" id="backup-keep-dias" class="form-control" min="1" max="365" value="30" />
-            <small style="color:var(--text-muted,#888)">Backups mais antigos que este limite são removidos automaticamente.</small>
-          </div>
-          <div class="form-group">
-            <label>Container Docker do PostgreSQL</label>
-            <input type="text" id="backup-container" class="form-control" placeholder="postgres-radio" />
-            <small style="color:var(--text-muted,#888)">Nome do container (docker ps). Deixe em branco para usar pg_dump local.</small>
-          </div>
-          <div class="form-group" style="display:flex;align-items:flex-end">
-            <div>
-              <p style="margin:0 0 0.25rem;font-size:0.85rem;color:var(--text-muted,#888)">Agendamento automático</p>
-              <p id="backup-cron" style="margin:0;font-weight:500">—</p>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-          <button class="btn btn-primary" onclick="backupSalvarConfig()">
-            <i class="fas fa-save"></i> Salvar Configurações
-          </button>
-        </div>
-      </div>
-
-      <!-- Lista de backups -->
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-          <h3 style="margin:0">Backups Disponíveis</h3>
-          <button class="btn btn-secondary btn-sm" onclick="backupCarregarLista()">
-            <i class="fas fa-sync-alt"></i>
-          </button>
-        </div>
-        <div class="table-responsive">
-          <table class="table" id="table-backups">
-            <thead>
-              <tr>
-                <th>Arquivo</th>
-                <th>Tamanho</th>
-                <th>Data de criação</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td colspan="4" class="text-center">Carregando...</td></tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
