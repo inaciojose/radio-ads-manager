@@ -21,6 +21,7 @@ import unicodedata
 import ntpath
 import requests
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dotenv import load_dotenv
@@ -82,6 +83,10 @@ class Config:
 
     # Prefixo canônico para identificar propagandas nos logs da rádio.
     CHAMADAS_BASE_PATH = os.getenv("CHAMADAS_BASE_PATH", r"J:\AZARASTUDIO\CHAMADAS")
+
+    # Fuso horário local dos logs (os horários nos arquivos .log são horário local).
+    # Deve corresponder à timezone do servidor de rádio.
+    LOG_TIMEZONE = os.getenv("LOG_TIMEZONE", "America/Fortaleza")
 
     def parse_log_sources(self) -> List[Tuple[str, str]]:
         sources: List[Tuple[str, str]] = []
@@ -156,10 +161,13 @@ class ZaraLogParser:
             return None
 
         hora_parts = hora_str.split(":")
+        tz = ZoneInfo(self.config.LOG_TIMEZONE)
         data_hora = date.replace(
             hour=int(hora_parts[0]),
             minute=int(hora_parts[1]),
-            second=int(hora_parts[2])
+            second=int(hora_parts[2]),
+            microsecond=0,
+            tzinfo=tz,
         )
 
         nome_arquivo = ntpath.basename(caminho_tocado)
