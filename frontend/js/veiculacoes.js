@@ -51,6 +51,38 @@ function setFreqTab(freq, btn) {
   renderVeiculacoes(_veiculacoesAll)
 }
 
+function _getVeiculacaoRowClass(v) {
+  if (v.status_chamada === "verde") return ' class="row-verde"'
+  if (v.status_chamada === "vermelho") return ' class="row-vermelho"'
+  if (v.status_chamada === "amarelo") return ' class="row-amarelo"'
+  // Fallback para veiculações antigas (sem status_chamada)
+  if (!v.arquivo_nome) return ' class="row-nao-cadastrado"'
+  return ""
+}
+
+function _getVeiculacaoClienteCell(v) {
+  if (v.cliente_nome) return escapeHtml(v.cliente_nome)
+  if (v.codigo_chamada_raw != null) {
+    return `<span class="text-muted" title="Código (${v.codigo_chamada_raw}) sem cliente cadastrado">( ${v.codigo_chamada_raw} ) ?</span>`
+  }
+  return `<span class="text-muted">—</span>`
+}
+
+function _getVeiculacaoArquivoCell(v) {
+  const nome = v.arquivo_nome || v.nome_arquivo_raw || "-"
+  if (!v.arquivo_nome && v.nome_arquivo_raw) {
+    return `<span class="text-muted" title="Arquivo não cadastrado no sistema">${escapeHtml(nome)}</span>`
+  }
+  return escapeHtml(nome)
+}
+
+function _getVeiculacaoStatusCell(v) {
+  if (v.status_chamada === "verde") return '<span class="badge badge-success">Verde</span>'
+  if (v.status_chamada === "vermelho") return '<span class="badge badge-danger">Vermelho</span>'
+  if (v.status_chamada === "amarelo") return '<span class="badge badge-warning">Amarelo</span>'
+  return '<span class="badge badge-secondary">—</span>'
+}
+
 function renderVeiculacoes(items) {
   const tbody = document.querySelector("#table-veiculacoes tbody")
   if (!tbody) return
@@ -58,67 +90,25 @@ function renderVeiculacoes(items) {
   const filtered = _activeFreq ? items.filter((v) => v.frequencia === _activeFreq) : items
 
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Sem veiculacoes</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Sem veiculacoes</td></tr>'
     return
   }
 
   tbody.innerHTML = filtered
     .map((v) => {
-      const naoCadastrado = !v.arquivo_nome  // arquivo não está no sistema
-      const semContrato = !naoCadastrado && v.processado && !v.contabilizada
-
-      let rowClass = ""
-      if (naoCadastrado) rowClass = ' class="row-nao-cadastrado"'
-      else if (semContrato) rowClass = ' class="row-sem-contrato"'
-
-      const arquivoCell = naoCadastrado
-        ? `<span title="Arquivo não cadastrado no sistema">${escapeHtml(v.nome_arquivo_raw || "-")}</span>`
-        : escapeHtml(v.arquivo_nome || "-")
-
-      const clienteCell = naoCadastrado
-        ? `<span class="text-muted">Não cadastrado</span>`
-        : escapeHtml(v.cliente_nome || "-")
-
-      let contratoCell
-      if (naoCadastrado) {
-        contratoCell = `<span class="badge badge-danger">Não identificado</span>`
-      } else if (semContrato) {
-        contratoCell = `<span class="badge badge-warning">Sem contrato</span>`
-      } else {
-        contratoCell = escapeHtml(v.numero_contrato || "-")
-      }
-
+      const rowClass = _getVeiculacaoRowClass(v)
       return `
       <tr${rowClass}>
         <td>${formatTime(v.data_hora)}</td>
         <td>${escapeHtml(v.frequencia || "-")}</td>
-        <td>${clienteCell}</td>
-        <td>${arquivoCell}</td>
+        <td>${_getVeiculacaoClienteCell(v)}</td>
+        <td>${_getVeiculacaoArquivoCell(v)}</td>
         <td>${escapeHtml(v.tipo_programa || "-")}</td>
-        <td>${contratoCell}</td>
-        <td>${getStatusBadge(String(v.processado), "processado")}</td>
+        <td>${_getVeiculacaoStatusCell(v)}</td>
       </tr>
     `
     })
     .join("")
-}
-
-async function processarVeiculacoes() {
-  if (!requireWriteAccess()) return
-  const data = document.getElementById("filter-veiculacao-data")?.value || getTodayDate()
-  try {
-    showLoading()
-    const response = await api.processarVeiculacoes({
-      data_inicio: data,
-      data_fim: data,
-    })
-    showToast(response.message || "Processamento concluido", "success")
-    await loadVeiculacoes()
-  } catch (error) {
-    showToast(error.message || "Erro ao processar veiculacoes", "error")
-  } finally {
-    hideLoading()
-  }
 }
 
 // ============================================

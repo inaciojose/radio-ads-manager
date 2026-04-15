@@ -240,6 +240,10 @@ class API {
     return this.request(`/clientes/${id}`)
   }
 
+  async getClienteProgresso(clienteId) {
+    return this.request(`/clientes/${clienteId}/progresso`)
+  }
+
   async createCliente(data) {
     return this.request("/clientes/", {
       method: "POST",
@@ -754,6 +758,11 @@ class API {
 
   async downloadCaixetaPdf(tipo) {
     await this.downloadBlob(`/caixeta/${tipo}/pdf`, `caixeta_${tipo}.pdf`)
+  }
+
+  async getCaixetaStatusVeiculacoes(tipo, params = {}) {
+    const query = new URLSearchParams(params).toString()
+    return this.request(`/caixeta/${tipo}/status-veiculacoes${query ? "?" + query : ""}`)
   }
 
   // ============================================

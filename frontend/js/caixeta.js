@@ -42,10 +42,33 @@ async function _fetchAndRenderCaixeta(tipo) {
     const data = await api.getCaixeta(tipo)
     _caixetaData[tipo] = data
     _renderCaixetaView(data)
+    // Carrega status de veiculações em background e atualiza os indicadores
+    _atualizarStatusVeiculacoesCaixeta(tipo)
   } catch (error) {
     showToast(error.message || "Erro ao carregar grade", "error")
   } finally {
     hideLoading()
+  }
+}
+
+async function _atualizarStatusVeiculacoesCaixeta(tipo) {
+  try {
+    const status = await api.getCaixetaStatusVeiculacoes(tipo)
+    if (!status?.comerciais?.length) return
+    status.comerciais.forEach((item) => {
+      const el = document.querySelector(`[data-caixeta-comercial-id="${item.comercial_id}"]`)
+      if (!el) return
+      el.classList.remove("caixeta-tocou", "caixeta-nao-tocou")
+      if (item.status === "tocou") {
+        el.classList.add("caixeta-tocou")
+        el.title = `Tocou às ${item.veiculacao_hora}`
+      } else if (item.status === "nao_tocou") {
+        el.classList.add("caixeta-nao-tocou")
+        el.title = `Esperado às ${item.horario} — não encontrado no log`
+      }
+    })
+  } catch {
+    // silencioso — funcionalidade opcional
   }
 }
 
@@ -105,15 +128,16 @@ function _renderCaixetaView(data) {
             if (isHorarioAtual) classes.push("caixeta-horario--atual")
             if (c.destaque) classes.push("caixeta-comercial--destaque")
             const trAttr = classes.length ? ` class="${classes.join(" ")}"` : ""
+            const dataAttr = c.id ? ` data-caixeta-comercial-id="${c.id}"` : ""
             if (ci === 0) {
               tbodyRows += `<tr${trAttr}>
                 <td class="caixeta-hora" rowspan="${comerciais.length}">${escapeHtml(h.horario)}</td>
-                <td class="caixeta-comercial-nome">• ${escapeHtml(c.nome)}</td>
+                <td class="caixeta-comercial-nome"${dataAttr}>• ${escapeHtml(c.nome)}</td>
                 <td class="caixeta-comercial-obs">${escapeHtml(c.observacao || "")}</td>
               </tr>`
             } else {
               tbodyRows += `<tr${trAttr}>
-                <td class="caixeta-comercial-nome">• ${escapeHtml(c.nome)}</td>
+                <td class="caixeta-comercial-nome"${dataAttr}>• ${escapeHtml(c.nome)}</td>
                 <td class="caixeta-comercial-obs">${escapeHtml(c.observacao || "")}</td>
               </tr>`
             }
@@ -309,6 +333,15 @@ function _renderCaixetaEditComerciais(bi, hi, comerciais) {
           placeholder="Observação (opcional)"
           value="${escapeHtml(c.observacao)}"
           oninput="caixetaEditComercialField(${bi}, ${hi}, ${ci}, 'observacao', this.value)"
+        />
+        <input
+          type="number"
+          class="form-control caixeta-codigo-input"
+          placeholder="Cód."
+          title="Código de chamada do cliente (ex: 20)"
+          min="1"
+          value="${c.codigo_chamada ?? ""}"
+          oninput="caixetaEditComercialField(${bi}, ${hi}, ${ci}, 'codigo_chamada', this.value ? Number(this.value) : null)"
         />
         <button class="btn btn-sm btn-danger" onclick="removeComercialCaixeta(${bi}, ${hi}, ${ci})" title="Remover comercial">
           <i class="fas fa-trash"></i>

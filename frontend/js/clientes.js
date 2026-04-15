@@ -17,12 +17,60 @@ async function loadClientes() {
   }
 }
 
+// Cache de progresso: { cliente_id: { veiculacoes_hoje, meta_diaria_total, tem_alerta } }
+let _progressoCache = {}
+
+async function _carregarProgressoClientes(clientes) {
+  const ativos = clientes.filter((c) => c.status === "ativo" && c.codigo_chamada)
+  if (!ativos.length) return
+  await Promise.allSettled(
+    ativos.map(async (c) => {
+      try {
+        const prog = await api.getClienteProgresso(c.id)
+        _progressoCache[c.id] = prog
+      } catch {
+        // silencioso — progresso indisponível
+      }
+    }),
+  )
+}
+
+function _renderProgressoCell(clienteId) {
+  const prog = _progressoCache[clienteId]
+  if (!prog) return '<span class="text-muted">—</span>'
+
+  const hoje = prog.veiculacoes_hoje ?? 0
+  if (prog.meta_diaria_total == null) {
+    return `<span>${hoje} vei.</span>`
+  }
+
+  const alerta = prog.tem_alerta
+  const cor = alerta ? "badge-warning" : "badge-success"
+  return `<span class="badge ${cor}" title="Meta: ${prog.meta_diaria_total}/dia">${hoje} / ${prog.meta_diaria_total}</span>`
+}
+
+async function loadClientes() {
+  const status = document.getElementById("filter-cliente-status")?.value
+  try {
+    showLoading()
+    _progressoCache = {}
+    clientesCache = await api.getAllClientes({ ...(status ? { status } : {}) })
+    renderClientes(clientesCache)
+    // Carrega progresso em background e atualiza a tabela
+    _carregarProgressoClientes(clientesCache).then(() => renderClientes(clientesCache))
+  } catch (error) {
+    showToast(error.message || "Erro ao carregar clientes", "error")
+  } finally {
+    hideLoading()
+  }
+}
+
 function renderClientes(items) {
   const tbody = document.querySelector("#table-clientes tbody")
   if (!tbody) return
 
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Sem clientes</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Sem clientes</td></tr>'
     return
   }
 
@@ -31,8 +79,9 @@ function renderClientes(items) {
       (c) => `
       <tr>
         <td>${escapeHtml(c.nome)}</td>
+        <td>${c.codigo_chamada != null ? `<code>(${c.codigo_chamada})</code>` : '<span class="text-muted">—</span>'}</td>
         <td>${escapeHtml(c.cnpj_cpf || "-")}</td>
-        <td>${escapeHtml(c.email || "-")}</td>
+        <td>${_renderProgressoCell(c.id)}</td>
         <td>${escapeHtml(c.telefone || "-")}</td>
         <td>${getStatusBadge(c.status, "cliente")}</td>
         <td>
@@ -63,7 +112,8 @@ function searchClientes() {
     clientesCache.filter(
       (c) =>
         c.nome.toLowerCase().includes(termo) ||
-        (c.cnpj_cpf || "").toLowerCase().includes(termo),
+        (c.cnpj_cpf || "").toLowerCase().includes(termo) ||
+        String(c.codigo_chamada ?? "").includes(termo),
     ),
   )
 }
@@ -77,6 +127,7 @@ function showClienteModal(cliente = null) {
   document.getElementById("cliente-id").value = cliente?.id || ""
   document.getElementById("cliente-nome").value = cliente?.nome || ""
   document.getElementById("cliente-cnpj").value = maskCnpjCpf(cliente?.cnpj_cpf || "")
+  document.getElementById("cliente-codigo-chamada").value = cliente?.codigo_chamada ?? ""
   document.getElementById("cliente-telefone").value = maskTelefone(cliente?.telefone || "")
   document.getElementById("cliente-email").value = cliente?.email || ""
   document.getElementById("cliente-endereco").value = cliente?.endereco || ""
@@ -89,15 +140,16 @@ function showClienteModal(cliente = null) {
 async function saveCliente() {
   if (!requireWriteAccess()) return
   const id = document.getElementById("cliente-id").value
+  const codigoChamadaRaw = document.getElementById("cliente-codigo-chamada").value.trim()
   const payload = {
     nome: document.getElementById("cliente-nome").value.trim(),
     cnpj_cpf: document.getElementById("cliente-cnpj").value.trim() || null,
+    codigo_chamada: codigoChamadaRaw ? Number(codigoChamadaRaw) : null,
     telefone: document.getElementById("cliente-telefone").value.trim() || null,
     email: document.getElementById("cliente-email").value.trim() || null,
     endereco: document.getElementById("cliente-endereco").value.trim() || null,
     status: document.getElementById("cliente-status").value,
-    observacoes:
-      document.getElementById("cliente-observacoes").value.trim() || null,
+    observacoes: document.getElementById("cliente-observacoes").value.trim() || null,
   }
 
   if (!payload.nome) {
