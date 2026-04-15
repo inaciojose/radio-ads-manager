@@ -26,6 +26,19 @@ ROLE_OPERADOR = "operador"
 
 security = HTTPBearer(auto_error=False)
 
+# Secret gerado em runtime para o subprocesso do monitor.
+# Definido via set_monitor_secret() durante o startup da API.
+_monitor_secret: Optional[str] = None
+
+
+def set_monitor_secret(secret: str) -> None:
+    global _monitor_secret
+    _monitor_secret = secret
+
+
+def get_monitor_secret() -> Optional[str]:
+    return _monitor_secret
+
 
 def _is_production_env() -> bool:
     return os.getenv("APP_ENV", "development").strip().lower() in {"production", "prod"}
@@ -182,7 +195,10 @@ def require_roles(*roles: str) -> Callable:
 
 def require_monitor_or_roles(*roles: str) -> Callable:
     """
-    Autoriza requisição via X-API-Key ativa ou Bearer com role permitida.
+    Autoriza requisição via:
+    1. Secret em memória do monitor (gerado no startup, passado via env ao subprocesso)
+    2. X-API-Key cadastrada no banco (legado)
+    3. Bearer JWT com role permitida
     """
     def dependency(
         x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
@@ -191,6 +207,12 @@ def require_monitor_or_roles(*roles: str) -> Callable:
     ):
         api_key = (x_api_key or "").strip()
         if api_key:
+            # 1. Verificar contra o secret em memória (sem consulta ao banco)
+            monitor_secret = get_monitor_secret()
+            if monitor_secret and hmac.compare_digest(api_key, monitor_secret):
+                return None  # Autorizado como monitor
+
+            # 2. Verificar contra chaves cadastradas no banco (legado)
             api_key_hash = hash_api_key(api_key)
             db_key = (
                 db.query(models.ApiKey)

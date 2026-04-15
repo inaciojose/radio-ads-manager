@@ -11,10 +11,12 @@ Este arquivo contém todas as rotas (endpoints) relacionadas a clientes:
 
 from io import BytesIO
 from typing import List, Optional
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.auth import ROLE_ADMIN, ROLE_OPERADOR, require_roles
 from app.database import get_db
@@ -42,37 +44,26 @@ def listar_clientes(
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros"),
     status: Optional[str] = Query(None, description="Filtrar por status (ativo/inativo)"),
     busca: Optional[str] = Query(None, description="Buscar por nome ou CNPJ/CPF"),
+    codigo_chamada: Optional[int] = Query(None, description="Filtrar por código de chamada"),
     db: Session = Depends(get_db)
 ):
-    """
-    Lista todos os clientes cadastrados.
-    
-    Parâmetros:
-    - skip: Quantos registros pular (para paginação)
-    - limit: Quantos registros retornar (máximo)
-    - status: Filtrar por status (opcional)
-    - busca: Buscar por nome ou documento (opcional)
-    
-    Exemplo de uso:
-    GET /clientes?skip=0&limit=10&status=ativo
-    """
+    """Lista todos os clientes cadastrados."""
     query = db.query(models.Cliente)
-    
-    # Aplicar filtros se fornecidos
+
     if status:
         query = query.filter(models.Cliente.status == status)
-    
+
     if busca:
-        # Busca por nome ou CNPJ/CPF (case-insensitive)
         busca_pattern = f"%{busca}%"
         query = query.filter(
             (models.Cliente.nome.ilike(busca_pattern)) |
             (models.Cliente.cnpj_cpf.ilike(busca_pattern))
         )
-    
-    # Ordenar por nome e aplicar paginação
+
+    if codigo_chamada is not None:
+        query = query.filter(models.Cliente.codigo_chamada == codigo_chamada)
+
     clientes = query.order_by(models.Cliente.nome).offset(skip).limit(limit).all()
-    
     return clientes
 
 
@@ -202,13 +193,23 @@ def criar_cliente(
         cliente_existente = db.query(models.Cliente).filter(
             models.Cliente.cnpj_cpf == cliente.cnpj_cpf
         ).first()
-        
         if cliente_existente:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Já existe um cliente cadastrado com o CNPJ/CPF: {cliente.cnpj_cpf}"
             )
-    
+
+    # Verificar unicidade do codigo_chamada
+    if cliente.codigo_chamada is not None:
+        existente_codigo = db.query(models.Cliente).filter(
+            models.Cliente.codigo_chamada == cliente.codigo_chamada
+        ).first()
+        if existente_codigo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Já existe um cliente com o código de chamada {cliente.codigo_chamada}"
+            )
+
     # Criar novo cliente
     db_cliente = models.Cliente(**cliente.model_dump())
     db.add(db_cliente)
@@ -276,13 +277,24 @@ def atualizar_cliente(
             models.Cliente.cnpj_cpf == update_data["cnpj_cpf"],
             models.Cliente.id != cliente_id
         ).first()
-        
         if cliente_existente:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Já existe outro cliente com o CNPJ/CPF: {update_data['cnpj_cpf']}"
             )
-    
+
+    # Se está atualizando codigo_chamada, verificar unicidade
+    if "codigo_chamada" in update_data and update_data["codigo_chamada"] is not None:
+        existente_codigo = db.query(models.Cliente).filter(
+            models.Cliente.codigo_chamada == update_data["codigo_chamada"],
+            models.Cliente.id != cliente_id
+        ).first()
+        if existente_codigo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Já existe outro cliente com o código de chamada {update_data['codigo_chamada']}"
+            )
+
     # Aplicar atualizações
     for field, value in update_data.items():
         setattr(db_cliente, field, value)
@@ -358,6 +370,73 @@ def deletar_cliente(
 # ============================================
 # ENDPOINT: Estatísticas do cliente
 # ============================================
+
+@router.get("/{cliente_id}/progresso", response_model=schemas.ClienteProgressoResponse)
+def progresso_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna o progresso de veiculações do cliente para o dia atual e o mês corrente.
+
+    - veiculacoes_hoje: contagem direta de veiculacoes com cliente_id = X e data = hoje
+    - meta_diaria_total: soma das quantidade_diaria_meta dos itens de contratos ativos
+    - meta_total: soma das quantidade_contratada dos itens de contratos ativos
+    - tem_alerta: True quando veiculacoes_hoje < meta_diaria_total (e meta existe)
+    """
+    cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Cliente com ID {cliente_id} não encontrado")
+
+    hoje = date.today()
+    inicio_hoje = datetime.combine(hoje, datetime.min.time())
+    fim_hoje = datetime.combine(hoje, datetime.max.time())
+    primeiro_dia_mes = hoje.replace(day=1)
+    inicio_mes = datetime.combine(primeiro_dia_mes, datetime.min.time())
+
+    # Contar veiculações do dia vinculadas ao cliente (via cliente_id direto)
+    veiculacoes_hoje = db.query(func.count(models.Veiculacao.id)).filter(
+        models.Veiculacao.cliente_id == cliente_id,
+        models.Veiculacao.data_hora.between(inicio_hoje, fim_hoje),
+    ).scalar() or 0
+
+    # Contar veiculações do mês
+    veiculacoes_mes = db.query(func.count(models.Veiculacao.id)).filter(
+        models.Veiculacao.cliente_id == cliente_id,
+        models.Veiculacao.data_hora >= inicio_mes,
+    ).scalar() or 0
+
+    # Somar metas dos contratos ativos do cliente
+    contratos_ativos = db.query(models.Contrato).filter(
+        models.Contrato.cliente_id == cliente_id,
+        models.Contrato.status_contrato == "ativo",
+    ).all()
+
+    meta_diaria_total: Optional[int] = None
+    meta_total: Optional[int] = None
+
+    for contrato in contratos_ativos:
+        for item in contrato.itens:
+            if item.quantidade_diaria_meta is not None:
+                meta_diaria_total = (meta_diaria_total or 0) + item.quantidade_diaria_meta
+            if item.quantidade_contratada is not None:
+                meta_total = (meta_total or 0) + item.quantidade_contratada
+
+    tem_alerta = (
+        meta_diaria_total is not None and veiculacoes_hoje < meta_diaria_total
+    )
+
+    return schemas.ClienteProgressoResponse(
+        cliente_id=cliente_id,
+        cliente_nome=cliente.nome,
+        codigo_chamada=cliente.codigo_chamada,
+        veiculacoes_hoje=veiculacoes_hoje,
+        meta_diaria_total=meta_diaria_total,
+        meta_total=meta_total,
+        veiculacoes_mes=veiculacoes_mes,
+        tem_alerta=tem_alerta,
+    )
+
 
 @router.get("/{cliente_id}/resumo", response_model=schemas.ResumoCliente)
 def resumo_cliente(

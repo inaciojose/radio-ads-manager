@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.database import init_db, get_database_info, SessionLocal
-from app.auth import ensure_initial_admin, validate_auth_settings
+from app.auth import ensure_initial_admin, validate_auth_settings, set_monitor_secret
 from app.routers import arquivos, audit_log, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 from app.services.audit_service import limpar_logs_antigos
@@ -66,21 +67,22 @@ def _start_monitor() -> Optional[subprocess.Popen]:
         print("⚠️  Monitor de logs não encontrado em:", script)
         return None
 
-    if not os.getenv("MONITOR_API_KEY") and not os.getenv("API_TOKEN"):
-        print("⚠️  Monitor de logs não iniciado — configure MONITOR_API_KEY no .env")
-        return None
-
     if not _log_sources_acessiveis():
         print("⚠️  Monitor de logs não iniciado — nenhum diretório de LOG_SOURCES acessível")
         return None
 
     try:
+        monitor_secret = secrets.token_hex(32)
+        set_monitor_secret(monitor_secret)
+        env = os.environ.copy()
+        env["RADIO_ADS_MONITOR_SECRET"] = monitor_secret
         proc = subprocess.Popen(
             [sys.executable, str(script), "watch"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            env=env,
         )
         threading.Thread(target=_pipe_reader, args=(proc,), daemon=True).start()
         return proc

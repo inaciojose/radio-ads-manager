@@ -21,7 +21,6 @@ from app import models, schemas
 from app.services.veiculacoes_service import (
     buscar_meta_contabilizada,
     buscar_item_contabilizado,
-    processar_veiculacoes_periodo,
 )
 from app.services.export_service import build_excel, build_pdf, make_bar_chart
 
@@ -142,10 +141,8 @@ def listar_veiculacoes(
         query = query.filter(models.Veiculacao.frequencia == frequencia)
     
     if cliente_id:
-        # Join com arquivo_audio para filtrar por cliente
-        query = query.join(models.ArquivoAudio).filter(
-            models.ArquivoAudio.cliente_id == cliente_id
-        )
+        # Filtra por cliente_id diretamente (novo fluxo via codigo_chamada)
+        query = query.filter(models.Veiculacao.cliente_id == cliente_id)
     
     if tipo_programa:
         query = query.filter(models.Veiculacao.tipo_programa == tipo_programa)
@@ -555,42 +552,6 @@ def veiculacoes_hoje(
 
 
 # ============================================
-# ENDPOINT: Processar veiculações
-# ============================================
-
-@router.post("/processar", response_model=schemas.MessageResponse)
-def processar_veiculacoes(
-    data_inicio: Optional[date] = Query(None, description="Data início (padrão: hoje)"),
-    data_fim: Optional[date] = Query(None, description="Data fim (padrão: hoje)"),
-    force: bool = Query(False, description="Reprocessar mesmo se já processado"),
-    db: Session = Depends(get_db),
-    _auth=Depends(require_monitor_or_roles(ROLE_ADMIN, ROLE_OPERADOR)),
-):
-    """
-    Processa veiculações não processadas, contabilizando-as nos contratos.
-    
-    O processamento faz:
-    1. Identifica o contrato ativo do cliente
-    2. Encontra o item do contrato correspondente ao tipo de programa
-    3. Incrementa a quantidade_executada
-    4. Marca a veiculação como processada
-    
-    Parâmetros:
-    - data_inicio e data_fim: Período a processar (padrão: hoje)
-    - force: Se true, reprocessa mesmo veiculações já processadas
-    
-    Exemplo:
-    POST /veiculacoes/processar?data_inicio=2024-01-01&data_fim=2024-01-31
-    """
-    return processar_veiculacoes_periodo(
-        db=db,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
-        force=force,
-    )
-
-
-# ============================================
 # ENDPOINT: Estatísticas de veiculações
 # ============================================
 
@@ -692,9 +653,8 @@ def listar_veiculacoes_detalhadas(
     inicio_dia = datetime.combine(data, datetime.min.time())
     fim_dia = datetime.combine(data, datetime.max.time())
     
-    # Query com joins para pegar todas as informações.
-    # Usa outerjoin em todos os relacionamentos para incluir veiculações
-    # de arquivos não cadastrados (nome_arquivo_raw preenchido).
+    ClienteDir = models.Cliente.__table__.alias("cliente_dir")
+
     veiculacoes = db.query(
         models.Veiculacao.id,
         models.Veiculacao.data_hora,
@@ -703,14 +663,18 @@ def listar_veiculacoes_detalhadas(
         models.Veiculacao.processado,
         models.Veiculacao.contabilizada,
         models.Veiculacao.nome_arquivo_raw,
+        models.Veiculacao.cliente_id,
+        models.Veiculacao.codigo_chamada_raw,
+        models.Veiculacao.status_chamada,
         models.ArquivoAudio.nome_arquivo.label('arquivo_nome'),
         models.ArquivoAudio.titulo.label('arquivo_titulo'),
+        # cliente via vínculo direto (novo fluxo)
         models.Cliente.nome.label('cliente_nome'),
         models.Contrato.numero_contrato
     ).outerjoin(
         models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id
     ).outerjoin(
-        models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id
+        models.Cliente, models.Veiculacao.cliente_id == models.Cliente.id
     ).outerjoin(
         models.Contrato, models.Veiculacao.contrato_id == models.Contrato.id
     ).filter(
@@ -719,7 +683,6 @@ def listar_veiculacoes_detalhadas(
         models.Veiculacao.data_hora.desc()
     ).offset(skip).limit(limit).all()
 
-    # Converter para lista de dicts
     resultado = [
         {
             "id": v.id,
@@ -731,8 +694,11 @@ def listar_veiculacoes_detalhadas(
             "nome_arquivo_raw": v.nome_arquivo_raw,
             "arquivo_nome": v.arquivo_nome,
             "arquivo_titulo": v.arquivo_titulo,
+            "cliente_id": v.cliente_id,
             "cliente_nome": v.cliente_nome,
-            "numero_contrato": v.numero_contrato
+            "codigo_chamada_raw": v.codigo_chamada_raw,
+            "status_chamada": v.status_chamada,
+            "numero_contrato": v.numero_contrato,
         }
         for v in veiculacoes
     ]
@@ -751,12 +717,11 @@ def listar_nao_contabilizadas(
     _auth=Depends(require_roles(ROLE_ADMIN, ROLE_OPERADOR)),
 ):
     """
-    Lista veiculações que foram processadas mas não contabilizadas
-    (processado=True, contabilizada=False).
+    Lista veiculações não identificadas ou sem cliente correspondente.
 
-    Casos comuns:
-    - Arquivo de áudio não cadastrado no sistema
-    - Nenhum contrato ativo encontrado para o arquivo/frequência na data
+    - vermelho: número (N) extraído do arquivo, mas nenhum cliente ativo tem esse codigo_chamada
+    - amarelo: arquivo na pasta correta mas sem padrão (N) no nome
+    - sem status_chamada: veiculações antigas (pré-migração) não contabilizadas
     """
     if not data_inicio:
         data_inicio = date.today() - timedelta(days=30)
@@ -772,16 +737,25 @@ def listar_nao_contabilizadas(
             models.Veiculacao.data_hora,
             models.Veiculacao.frequencia,
             models.Veiculacao.nome_arquivo_raw,
+            models.Veiculacao.cliente_id,
+            models.Veiculacao.codigo_chamada_raw,
+            models.Veiculacao.status_chamada,
             models.Veiculacao.motivo_nao_contabilizada,
             models.ArquivoAudio.nome_arquivo.label("arquivo_nome"),
             models.Cliente.nome.label("cliente_nome"),
         )
         .outerjoin(models.ArquivoAudio, models.Veiculacao.arquivo_audio_id == models.ArquivoAudio.id)
-        .outerjoin(models.Cliente, models.ArquivoAudio.cliente_id == models.Cliente.id)
+        .outerjoin(models.Cliente, models.Veiculacao.cliente_id == models.Cliente.id)
         .filter(
-            models.Veiculacao.processado == True,  # noqa: E712
-            models.Veiculacao.contabilizada == False,  # noqa: E712
             models.Veiculacao.data_hora.between(inicio, fim),
+            or_(
+                models.Veiculacao.status_chamada.in_(["vermelho", "amarelo"]),
+                and_(
+                    models.Veiculacao.status_chamada.is_(None),
+                    models.Veiculacao.processado == True,  # noqa: E712
+                    models.Veiculacao.contabilizada == False,  # noqa: E712
+                ),
+            ),
         )
     )
 
@@ -792,12 +766,13 @@ def listar_nao_contabilizadas(
 
     result = []
     for v in rows:
-        motivo = v.motivo_nao_contabilizada
-        if not motivo:
-            if v.arquivo_nome is None:
-                motivo = "Arquivo não cadastrado no sistema"
-            else:
-                motivo = "Sem contrato ativo na data da veiculação"
+        if v.status_chamada == "vermelho":
+            motivo = f"Código ({v.codigo_chamada_raw}) não corresponde a nenhum cliente ativo"
+        elif v.status_chamada == "amarelo":
+            motivo = "Arquivo sem código identificador no nome"
+        else:
+            motivo = v.motivo_nao_contabilizada or "Sem contrato ativo na data da veiculação"
+
         result.append(
             schemas.NaoContabilizadaItem(
                 id=v.id,
@@ -805,7 +780,10 @@ def listar_nao_contabilizadas(
                 frequencia=v.frequencia,
                 nome_arquivo_raw=v.nome_arquivo_raw,
                 arquivo_nome=v.arquivo_nome,
+                cliente_id=v.cliente_id,
                 cliente_nome=v.cliente_nome,
+                codigo_chamada_raw=v.codigo_chamada_raw,
+                status_chamada=v.status_chamada,
                 motivo=motivo,
             )
         )

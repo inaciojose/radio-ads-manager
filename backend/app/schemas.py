@@ -22,12 +22,13 @@ class ClienteBase(BaseModel):
     """Schema base com campos comuns de Cliente"""
     nome: str = Field(..., min_length=3, max_length=200, description="Nome ou razão social")
     cnpj_cpf: Optional[str] = Field(None, max_length=18, description="CNPJ ou CPF")
+    codigo_chamada: Optional[int] = Field(None, gt=0, description="Número identificador no nome do arquivo de chamada, ex: (20) = 20")
     email: Optional[str] = Field(None, max_length=100)
     telefone: Optional[str] = Field(None, max_length=20)
     endereco: Optional[str] = None
     status: str = Field(default="ativo", description="Status: ativo ou inativo")
     observacoes: Optional[str] = None
-    
+
     @field_validator("status")
     @classmethod
     def validar_status(cls, v):
@@ -47,6 +48,7 @@ class ClienteUpdate(BaseModel):
     # Todos os campos são opcionais na atualização
     nome: Optional[str] = Field(None, min_length=3, max_length=200)
     cnpj_cpf: Optional[str] = Field(None, max_length=18)
+    codigo_chamada: Optional[int] = Field(None, gt=0)
     email: Optional[str] = Field(None, max_length=100)
     telefone: Optional[str] = Field(None, max_length=20)
     endereco: Optional[str] = None
@@ -59,8 +61,20 @@ class ClienteResponse(ClienteBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class ClienteProgressoResponse(BaseModel):
+    """Progresso de veiculações do cliente para o dia atual."""
+    cliente_id: int
+    cliente_nome: str
+    codigo_chamada: Optional[int]
+    veiculacoes_hoje: int
+    meta_diaria_total: Optional[int]   # soma das metas diárias dos contratos ativos
+    meta_total: Optional[int]          # soma das quantidades contratadas totais dos contratos ativos
+    veiculacoes_mes: int               # total no mês corrente
+    tem_alerta: bool                   # veiculacoes_hoje < meta_diaria_total (quando meta existe)
 
 
 # ============================================
@@ -476,6 +490,9 @@ class VeiculacaoBase(BaseModel):
     """Schema base para veiculação"""
     arquivo_audio_id: Optional[int] = None
     nome_arquivo_raw: Optional[str] = None  # Preenchido quando arquivo não está cadastrado
+    cliente_id: Optional[int] = None        # Vínculo direto via codigo_chamada
+    codigo_chamada_raw: Optional[int] = None  # Número extraído do nome do arquivo
+    status_chamada: Optional[str] = None    # 'verde'|'vermelho'|'amarelo'
     contrato_id: Optional[int] = None
     data_hora: datetime
     frequencia: Optional[str] = Field(None, description='Frequência: 102.7 ou 104.7')
@@ -534,18 +551,24 @@ class VeiculacaoDetalhada(BaseModel):
     nome_arquivo_raw: Optional[str]
     arquivo_nome: Optional[str]
     arquivo_titulo: Optional[str]
+    cliente_id: Optional[int]
     cliente_nome: Optional[str]
+    codigo_chamada_raw: Optional[int]
+    status_chamada: Optional[str]
     numero_contrato: Optional[str]
 
 
 class NaoContabilizadaItem(BaseModel):
-    """Item de veiculação processada mas não contabilizada."""
+    """Veiculação não identificada ou sem cliente correspondente."""
     id: int
     data_hora: datetime
     frequencia: Optional[str]
     nome_arquivo_raw: Optional[str]
     arquivo_nome: Optional[str]
+    cliente_id: Optional[int]
     cliente_nome: Optional[str]
+    codigo_chamada_raw: Optional[int]
+    status_chamada: Optional[str]
     motivo: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -827,6 +850,7 @@ class CaixetaComercialIn(BaseModel):
     observacao: Optional[str] = None
     destaque: bool = False
     ordem: int = 0
+    codigo_chamada: Optional[int] = Field(None, gt=0)
 
 
 class CaixetaComercialOut(BaseModel):
@@ -835,6 +859,7 @@ class CaixetaComercialOut(BaseModel):
     observacao: Optional[str] = None
     destaque: bool = False
     ordem: int
+    codigo_chamada: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -876,6 +901,23 @@ class CaixetaResponse(BaseModel):
 
 class CaixetaSaveRequest(BaseModel):
     blocos: List[CaixetaBlocoIn] = []
+
+
+class CaixetaComercialStatus(BaseModel):
+    """Status de um comercial da caixeta em relação às veiculações do dia."""
+    comercial_id: int
+    nome: str
+    codigo_chamada: Optional[int]
+    horario: str          # HH:MM do horário agendado
+    status: str           # 'tocou' | 'nao_tocou' | 'sem_codigo'
+    veiculacao_id: Optional[int] = None
+    veiculacao_hora: Optional[str] = None  # HH:MM:SS real
+
+
+class CaixetaStatusVeiculacoesResponse(BaseModel):
+    tipo: str
+    data: date
+    comerciais: List[CaixetaComercialStatus] = []
 
 
 # ============================================

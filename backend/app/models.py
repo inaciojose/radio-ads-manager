@@ -81,6 +81,7 @@ class Cliente(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(200), nullable=False)
     cnpj_cpf = Column(String(18), unique=True, index=True)
+    codigo_chamada = Column(Integer, unique=True, nullable=True, index=True)  # Número identificador no nome do arquivo
     email = Column(String(100))
     telefone = Column(String(20))
     endereco = Column(Text)
@@ -88,11 +89,12 @@ class Cliente(Base):
     observacoes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relacionamentos (SQLAlchemy cria automaticamente)
     # 'back_populates' cria a relação bidirecional
     contratos = relationship("Contrato", back_populates="cliente", cascade="all, delete-orphan")
     arquivos_audio = relationship("ArquivoAudio", back_populates="cliente", cascade="all, delete-orphan")
+    veiculacoes = relationship("Veiculacao", back_populates="cliente", foreign_keys="Veiculacao.cliente_id")
     
     def __repr__(self):
         """Representação em string (útil para debug)"""
@@ -319,18 +321,22 @@ class Veiculacao(Base):
     id = Column(Integer, primary_key=True, index=True)
     arquivo_audio_id = Column(Integer, ForeignKey("arquivos_audio.id"), nullable=True)
     nome_arquivo_raw = Column(String(255))  # Preenchido quando arquivo não está cadastrado
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)  # Vínculo direto via codigo_chamada
+    codigo_chamada_raw = Column(Integer, nullable=True, index=True)  # Número extraído do nome do arquivo
+    status_chamada = Column(String(10), nullable=True)  # 'verde'|'vermelho'|'amarelo'
     contrato_id = Column(Integer, ForeignKey("contratos.id"))
     data_hora = Column(DateTime(timezone=True), nullable=False, index=True)
     frequencia = Column(String(10), index=True)  # Frequência onde a chamada foi executada
     tipo_programa = Column(String(50))
     fonte = Column(String(50), default="zara_log")  # De onde veio a informação
-    processado = Column(Boolean, default=False, index=True)  # Se já foi contabilizado
-    contabilizada = Column(Boolean, default=True, index=True)  # Se incrementou algum contador de contrato
-    motivo_nao_contabilizada = Column(Text, nullable=True)  # Razão pela qual não foi contabilizada
+    processado = Column(Boolean, default=False, index=True)
+    contabilizada = Column(Boolean, default=True, index=True)
+    motivo_nao_contabilizada = Column(Text, nullable=True)
 
     # Relacionamentos
     arquivo_audio = relationship("ArquivoAudio", back_populates="veiculacoes")
     contrato = relationship("Contrato", back_populates="veiculacoes")
+    cliente = relationship("Cliente", back_populates="veiculacoes", foreign_keys=[cliente_id])
     
     def __repr__(self):
         return f"<Veiculacao(id={self.id}, data_hora={self.data_hora}, processado={self.processado})>"
@@ -483,6 +489,7 @@ class CaixetaComercial(Base):
     observacao = Column(Text, nullable=True)
     destaque = Column(Boolean, default=False, nullable=False)
     ordem = Column(Integer, default=0, nullable=False)
+    codigo_chamada = Column(Integer, nullable=True, index=True)  # Vínculo com cliente para cruzamento com veiculações
 
     horario_item = relationship("CaixetaHorario", back_populates="comerciais")
 
