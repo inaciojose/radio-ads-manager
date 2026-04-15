@@ -111,7 +111,7 @@ function isPublicPage(pageName) {
 
 function canAccessPage(pageName) {
   if (isPublicPage(pageName)) return true
-  if (pageName === "usuarios" || pageName === "audit-log") return canManageUsers()
+  if (pageName === "usuarios" || pageName === "audit-log" || pageName === "backup") return canManageUsers()
   return Boolean(appState.user)
 }
 
@@ -290,6 +290,7 @@ function showPage(pageName, evt) {
     usuarios: "Usuários",
     caixeta: "Grade de Comerciais",
     "audit-log": "Audit Log",
+    "backup": "Backup",
   }
   document.getElementById("page-title").textContent = titles[pageName]
 
@@ -340,6 +341,13 @@ async function loadPageData(pageName) {
     case "audit-log":
       if (canManageUsers()) {
         return loadAuditLog()
+      } else {
+        showToast("Acesso restrito a administradores", "warning")
+      }
+      break
+    case "backup":
+      if (canManageUsers()) {
+        return initBackupPage()
       } else {
         showToast("Acesso restrito a administradores", "warning")
       }

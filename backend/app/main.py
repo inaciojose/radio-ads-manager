@@ -22,7 +22,7 @@ from typing import Any, Optional
 
 from app.database import init_db, get_database_info, SessionLocal
 from app.auth import ensure_initial_admin, validate_auth_settings, set_monitor_secret
-from app.routers import arquivos, audit_log, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
+from app.routers import arquivos, audit_log, auth, backup, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 from app.services.audit_service import limpar_logs_antigos
 from app.services.veiculacoes_service import limpar_veiculacoes_antigas
@@ -472,6 +472,9 @@ app.include_router(caixeta.router)
 
 # Registrar audit log (somente admin)
 app.include_router(audit_log.router)
+
+# Registrar backup (somente admin)
+app.include_router(backup.router)
 
 
 # ============================================

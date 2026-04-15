@@ -783,6 +783,30 @@ class API {
     const qs = new URLSearchParams(params).toString()
     await this.downloadBlob(`/audit-log/exportar/pdf${qs ? "?" + qs : ""}`, "audit_log.pdf")
   }
+
+  // ============================================
+  // Backup
+  // ============================================
+
+  async getBackupConfig() {
+    return this.request("/backup/config")
+  }
+
+  async putBackupConfig(data) {
+    return this.request("/backup/config", { method: "PUT", body: JSON.stringify(data) })
+  }
+
+  async postBackupExecutar() {
+    return this.request("/backup/executar", { method: "POST" })
+  }
+
+  async getBackupListar() {
+    return this.request("/backup/listar")
+  }
+
+  async postBackupRestaurar(data) {
+    return this.request("/backup/restaurar", { method: "POST", body: JSON.stringify(data) })
+  }
 }
 
 // Instância global da API
