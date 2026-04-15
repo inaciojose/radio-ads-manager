@@ -25,6 +25,7 @@ from app.auth import ensure_initial_admin, validate_auth_settings, set_monitor_s
 from app.routers import arquivos, audit_log, auth, caixeta, clientes, comissoes, contratos, notas_fiscais, programas, responsaveis, usuarios, veiculacoes
 from app.services.contratos_service import auto_concluir_contratos_expirados
 from app.services.audit_service import limpar_logs_antigos
+from app.services.veiculacoes_service import limpar_veiculacoes_antigas
 
 
 # ============================================
@@ -147,6 +148,12 @@ async def lifespan(app: FastAPI):
         n_audit = limpar_logs_antigos(db, dias=30)
         if n_audit:
             print(f"🗑️  {n_audit} registro(s) de audit log removido(s) (>30 dias)")
+
+    # Remover veiculações com mais de 90 dias
+    with SessionLocal() as db:
+        n_veic = limpar_veiculacoes_antigas(db, dias=90)
+        if n_veic:
+            print(f"🗑️  {n_veic} veiculação(ões) removida(s) (>90 dias)")
 
     # Mostrar informações do banco
     db_info = get_database_info()

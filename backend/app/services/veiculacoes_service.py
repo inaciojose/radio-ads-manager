@@ -1,11 +1,27 @@
 import os
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
+
+
+def limpar_veiculacoes_antigas(db: Session, dias: int = 90) -> int:
+    """
+    Remove veiculações com mais de `dias` dias.
+    Chamada automaticamente na inicialização da aplicação.
+    Retorna a quantidade de registros removidos.
+    """
+    limite = datetime.now(timezone.utc) - timedelta(days=dias)
+    n = (
+        db.query(models.Veiculacao)
+        .filter(models.Veiculacao.data_hora < limite)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return n
 
 
 def resolver_item_contrato_para_veiculacao(

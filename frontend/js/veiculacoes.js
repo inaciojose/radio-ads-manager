@@ -4,6 +4,8 @@
 
 let _veiculacoesAll = []
 let _activeFreq = null
+let _sortCol = "data_hora"
+let _sortAsc = true
 
 // ============================================
 // Abas da página de Veiculações
@@ -109,6 +111,53 @@ function renderVeiculacoes(items) {
     `
     })
     .join("")
+}
+
+// ============================================
+// Ordenação de colunas
+// ============================================
+
+function _veiculacaoSortKey(v, col) {
+  switch (col) {
+    case "data_hora":    return v.data_hora || ""
+    case "frequencia":   return (v.frequencia || "").toLowerCase()
+    case "cliente":      return (v.cliente_nome || v.cliente?.nome || "").toLowerCase()
+    case "arquivo":      return (v.nome_arquivo_raw || v.arquivo_nome || "").toLowerCase()
+    case "tipo_programa":return (v.tipo_programa || "").toLowerCase()
+    case "status_chamada":return (v.status_chamada || "").toLowerCase()
+    default:             return ""
+  }
+}
+
+function sortVeiculacoes(col) {
+  if (_sortCol === col) {
+    _sortAsc = !_sortAsc
+  } else {
+    _sortCol = col
+    _sortAsc = true
+  }
+
+  _veiculacoesAll = [..._veiculacoesAll].sort((a, b) => {
+    const ka = _veiculacaoSortKey(a, col)
+    const kb = _veiculacaoSortKey(b, col)
+    const cmp = ka < kb ? -1 : ka > kb ? 1 : 0
+    return _sortAsc ? cmp : -cmp
+  })
+
+  // Atualizar indicadores visuais nos headers
+  document.querySelectorAll("#table-veiculacoes th.sortable").forEach((th) => {
+    const icon = th.querySelector(".sort-icon")
+    if (!icon) return
+    if (th.dataset.col === col) {
+      icon.textContent = _sortAsc ? "↑" : "↓"
+      th.classList.add("sort-active")
+    } else {
+      icon.textContent = "↕"
+      th.classList.remove("sort-active")
+    }
+  })
+
+  renderVeiculacoes(_veiculacoesAll)
 }
 
 // ============================================

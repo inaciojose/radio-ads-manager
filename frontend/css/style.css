@@ -1163,6 +1163,34 @@ body.sidebar-collapsed #api-status-text {
 }
 
 /* ============================================
+   TABELA: COLUNAS ORDENÁVEIS
+   ============================================ */
+
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.sortable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+th.sortable.sort-active {
+  color: var(--primary, #3b82f6);
+}
+
+th.sortable .sort-icon {
+  opacity: 0.4;
+  font-size: 0.75em;
+  margin-left: 4px;
+}
+
+th.sortable.sort-active .sort-icon {
+  opacity: 1;
+}
+
+/* ============================================
    PROGRAMAS - CHECKBOXES DE DIAS DA SEMANA
    ============================================ */
 

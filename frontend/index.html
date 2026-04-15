@@ -436,13 +436,12 @@
                 <table class="table" id="table-veiculacoes">
                   <thead>
                     <tr>
-                      <th>Horário</th>
-                      <th>Freq.</th>
-                      <th>Cliente</th>
-                      <th>Arquivo</th>
-                      <th>Programa</th>
-                      <th>Contrato</th>
-                      <th>Processado</th>
+                      <th class="sortable" data-col="data_hora" onclick="sortVeiculacoes('data_hora')">Horário <span class="sort-icon">↕</span></th>
+                      <th class="sortable" data-col="frequencia" onclick="sortVeiculacoes('frequencia')">Freq. <span class="sort-icon">↕</span></th>
+                      <th class="sortable" data-col="cliente" onclick="sortVeiculacoes('cliente')">Cliente <span class="sort-icon">↕</span></th>
+                      <th class="sortable" data-col="arquivo" onclick="sortVeiculacoes('arquivo')">Arquivo <span class="sort-icon">↕</span></th>
+                      <th class="sortable" data-col="tipo_programa" onclick="sortVeiculacoes('tipo_programa')">Programa <span class="sort-icon">↕</span></th>
+                      <th class="sortable" data-col="status_chamada" onclick="sortVeiculacoes('status_chamada')">Status <span class="sort-icon">↕</span></th>
                     </tr>
                   </thead>
                   <tbody>
