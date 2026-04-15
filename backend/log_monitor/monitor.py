@@ -120,7 +120,7 @@ class ZaraLogParser:
     def parse_file(self, filepath: str, date: datetime, frequencia: str) -> List[Dict]:
         propagandas = []
         try:
-            with open(filepath, "r", encoding="cp1252", errors="ignore") as f:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 for line_num, line in enumerate(f, 1):
                     try:
                         propaganda = self.parse_line(line, date, frequencia)
@@ -318,7 +318,7 @@ class LogMonitor:
         propagandas: List[Dict] = []
 
         try:
-            with open(filepath, "r", encoding="cp1252", errors="ignore") as f:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 start_offset = self._file_offsets.get(key, 0) if incremental else 0
                 if incremental:
                     tamanho_atual = os.path.getsize(filepath)
