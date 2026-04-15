@@ -38,12 +38,32 @@ radio-ads-manager/
 - pip
 
 ## Instalação
+
+**Linux/macOS:**
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+```
+
+**Windows (CMD):**
+```cmd
+cd backend
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+copy .env.example .env
 ```
 
 ## Banco de Dados (PostgreSQL)
@@ -76,6 +96,8 @@ python -m app.main
 ```
 
 Execução em produção (exemplo):
+
+**Linux/macOS:**
 ```bash
 cd backend
 APP_ENV=production \
@@ -84,6 +106,18 @@ API_DOCS_ENABLED=false \
 APP_RELOAD=false \
 WEB_CONCURRENCY=2 \
 python -m app.main
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+$env:APP_ENV="production"; $env:APP_DEBUG="false"; $env:API_DOCS_ENABLED="false"; $env:APP_RELOAD="false"; $env:WEB_CONCURRENCY="2"; python -m app.main
+```
+
+**Windows (CMD):**
+```cmd
+cd backend
+set APP_ENV=production && set APP_DEBUG=false && set API_DOCS_ENABLED=false && set APP_RELOAD=false && set WEB_CONCURRENCY=2 && python -m app.main
 ```
 
 Requisitos mínimos para produção:

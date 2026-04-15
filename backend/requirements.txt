@@ -32,4 +32,6 @@ pytest==7.4.4              # Testes automatizados
 httpx==0.26.0              # Cliente HTTP para testes
 requests==2.31.0           # Dependência usada nos testes atuais
 pdfplumber==0.11.4
-pdfplumber==0.11.4
+
+# Timezone database (necessário no Windows — o Linux usa o tzdata do sistema)
+tzdata==2025.1

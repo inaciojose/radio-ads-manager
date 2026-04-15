@@ -91,7 +91,10 @@ class Config:
 
     # Arquivo de persistência dos offsets de leitura dos logs.
     # Permite retomar do ponto onde parou após um restart, evitando duplicatas.
-    OFFSETS_FILE = os.getenv("MONITOR_OFFSETS_FILE", "/tmp/radio_ads_monitor_offsets.json")
+    OFFSETS_FILE = os.getenv(
+        "MONITOR_OFFSETS_FILE",
+        str(Path(__file__).resolve().parent.parent / "monitor_offsets.json"),
+    )
 
     def parse_log_sources(self) -> List[Tuple[str, str]]:
         sources: List[Tuple[str, str]] = []
@@ -106,6 +109,38 @@ class Config:
             if freq and path:
                 sources.append((freq, path))
         return sources
+
+
+# ============================================
+# UTILITÁRIO: Detecção de Encoding
+# ============================================
+
+def _detect_file_encoding(filepath: str) -> str:
+    """
+    Detecta o encoding do arquivo verificando o BOM e validando UTF-8.
+
+    - UTF-16 LE/BE: BOM FF FE ou FE FF  → 'utf-16'  (Python lida com o BOM)
+    - UTF-8 com BOM: EF BB BF           → 'utf-8-sig'
+    - UTF-8 puro (válido)               → 'utf-8'
+    - Windows-1252 / ANSI               → 'cp1252'   (fallback para Zara Studio no Windows)
+
+    O Zara Studio costuma gravar logs em ANSI (cp1252) em instalações Windows,
+    o que causa o byte 0xED ('í') ser inválido em UTF-8 e descartado por
+    errors='ignore', corrompendo a palavra-chave "Início" → "Incio".
+    """
+    try:
+        with open(filepath, "rb") as f:
+            sample = f.read(4096)
+        if sample[:3] == b'\xef\xbb\xbf':
+            return "utf-8-sig"
+        if sample[:2] in (b'\xff\xfe', b'\xfe\xff'):
+            return "utf-16"
+        sample.decode("utf-8")   # Testa se o arquivo é UTF-8 válido
+        return "utf-8"
+    except UnicodeDecodeError:
+        return "cp1252"
+    except Exception:
+        return "utf-8"
 
 
 # ============================================
@@ -129,8 +164,9 @@ class ZaraLogParser:
 
     def parse_file(self, filepath: str, date: datetime, frequencia: str) -> List[Dict]:
         propagandas = []
+        encoding = _detect_file_encoding(filepath)
         try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(filepath, "r", encoding=encoding, errors="ignore") as f:
                 for line_num, line in enumerate(f, 1):
                     try:
                         propaganda = self.parse_line(line, date, frequencia)
@@ -363,15 +399,23 @@ class LogMonitor:
         logger.info(f"Processando arquivo: {filepath} (incremental={incremental})")
         key = (frequencia, filepath)
         propagandas: List[Dict] = []
+        encoding = _detect_file_encoding(filepath)
+        logger.info(f"Encoding detectado: {encoding} — {filepath}")
 
         try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            with open(filepath, "r", encoding=encoding, errors="ignore") as f:
                 start_offset = self._file_offsets.get(key, 0) if incremental else 0
-                if incremental:
+                if incremental and start_offset > 0:
                     tamanho_atual = os.path.getsize(filepath)
                     if start_offset > tamanho_atual:
                         start_offset = 0
-                    f.seek(start_offset)
+                    if start_offset > 0:
+                        try:
+                            f.seek(start_offset)
+                        except (OSError, UnicodeError, ValueError):
+                            # Offset inválido (ex.: salvo com encoding diferente) — relê do início
+                            logger.warning(f"Offset {start_offset} inválido para {filepath}, relendo do início")
+                            f.seek(0)
 
                 for line in f:
                     propaganda = self.parser.parse_line(line, date, frequencia)
